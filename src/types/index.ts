@@ -5,6 +5,9 @@ export interface Profile {
   email: string
   full_name: string
   role: UserRole
+  sip_extension?: string | null
+  sip_password?: string | null
+  sip_domain?: string | null
   created_at: string
   updated_at: string
 }

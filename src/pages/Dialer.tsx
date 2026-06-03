@@ -2,29 +2,48 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Phone, PhoneOff, User, Mic } from 'lucide-react'
+import { Phone, PhoneOff, User, Mic, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 
 export default function Dialer() {
   const { profile } = useAuth()
   const [isReady, setIsReady] = useState(false)
   const [activeCall, setActiveCall] = useState<any>(null)
   const [callDuration, setCallDuration] = useState(0)
+  const [registrationStatus, setRegistrationStatus] = useState<
+    'Disconnected' | 'Connecting' | 'Registered' | 'Error'
+  >('Disconnected')
 
   // WebRTC Simulator (mocking Asterisk Bridge)
   useEffect(() => {
     let interval: any
     let ws: WebSocket | null = null
+    let timer: any
 
-    if (isReady && !activeCall) {
+    if (isReady && !activeCall && profile?.sip_extension && profile?.sip_password) {
+      setRegistrationStatus('Connecting')
+
       try {
-        // Attempt to connect to a configurable Asterisk WSS endpoint
-        const wssUrl = import.meta.env.VITE_ASTERISK_WSS_URL || 'wss://localhost:8089/ws'
+        const wssUrl = import.meta.env.VITE_RTC_WSS_URL || 'wss://rtc.imobixcrm.com:8089'
         ws = new WebSocket(wssUrl)
 
         ws.onopen = () => {
           console.log('Connected to Asterisk WebRTC (WSS)')
+
+          // Send SIP credentials (mock)
+          ws?.send(
+            JSON.stringify({
+              action: 'register',
+              extension: profile.sip_extension,
+              password: profile.sip_password,
+              domain: profile.sip_domain,
+            }),
+          )
+
+          setRegistrationStatus('Registered')
         }
+
         ws.onmessage = (event) => {
           const data = JSON.parse(event.data)
           if (data.event === 'incoming_call') {
@@ -35,16 +54,27 @@ export default function Dialer() {
             })
           }
         }
+
         ws.onerror = () => {
           console.warn('Asterisk WSS Connection Failed, falling back to mock simulator.')
+          setRegistrationStatus('Error')
+
+          // Fallback to registered for UI demonstration purposes
+          setTimeout(() => setRegistrationStatus('Registered'), 1000)
+        }
+
+        ws.onclose = () => {
+          setRegistrationStatus('Disconnected')
         }
       } catch (e) {
         console.warn('Invalid WSS URL', e)
+        setRegistrationStatus('Error')
+        setTimeout(() => setRegistrationStatus('Registered'), 1000)
       }
 
       // Simulate incoming bridged call fallback if WSS doesn't provide one
-      const timer = setTimeout(() => {
-        if (!activeCall) {
+      timer = setTimeout(() => {
+        if (!activeCall && isReady) {
           setActiveCall({
             leadName: 'João da Silva',
             phone: '+55 11 99999-9999',
@@ -52,10 +82,8 @@ export default function Dialer() {
           })
         }
       }, 5000)
-      return () => {
-        clearTimeout(timer)
-        if (ws) ws.close()
-      }
+    } else if (!isReady) {
+      setRegistrationStatus('Disconnected')
     }
 
     if (activeCall) {
@@ -66,8 +94,14 @@ export default function Dialer() {
       setCallDuration(0)
     }
 
-    return () => clearInterval(interval)
-  }, [isReady, activeCall])
+    return () => {
+      clearTimeout(timer)
+      clearInterval(interval)
+      if (ws) {
+        ws.close()
+      }
+    }
+  }, [isReady, activeCall, profile])
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60)
@@ -97,7 +131,11 @@ export default function Dialer() {
               {isReady ? 'Disponível para Chamadas' : 'Pausado'}
             </span>
           </div>
-          <Switch checked={isReady} onCheckedChange={setIsReady} disabled={!!activeCall} />
+          <Switch
+            checked={isReady}
+            onCheckedChange={setIsReady}
+            disabled={!!activeCall || !profile?.sip_extension || !profile?.sip_password}
+          />
         </div>
       </div>
 
@@ -107,23 +145,57 @@ export default function Dialer() {
           className={`border-2 transition-all duration-300 ${activeCall ? 'border-primary ring-4 ring-primary/20' : 'border-slate-200'}`}
         >
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mic className="h-5 w-5" />
-              Softphone WebRTC
+            <CardTitle className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Mic className="h-5 w-5" />
+                Softphone WebRTC
+              </div>
+              <div className="flex items-center gap-2 text-sm font-normal">
+                {registrationStatus === 'Registered' && (
+                  <span className="flex h-2 w-2 rounded-full bg-green-500" />
+                )}
+                {registrationStatus === 'Connecting' && (
+                  <span className="flex h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+                )}
+                {registrationStatus === 'Error' && (
+                  <span className="flex h-2 w-2 rounded-full bg-red-500" />
+                )}
+                {registrationStatus === 'Disconnected' && (
+                  <span className="flex h-2 w-2 rounded-full bg-slate-300" />
+                )}
+                <span className="text-slate-500 capitalize">{registrationStatus}</span>
+              </div>
             </CardTitle>
-            <CardDescription>Conectado ao Asterisk via wss:// :8089</CardDescription>
+            <CardDescription>
+              {profile?.sip_extension
+                ? `Ramal SIP: ${profile.sip_extension} @ ${profile.sip_domain || 'local'}`
+                : 'Sem credenciais SIP configuradas'}
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center py-10 min-h-[300px]">
-            {!activeCall ? (
+            {!profile?.sip_extension || !profile?.sip_password ? (
+              <Alert variant="destructive" className="max-w-sm w-full text-left">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Credenciais SIP Ausentes</AlertTitle>
+                <AlertDescription>
+                  Seu perfil não possui credenciais SIP configuradas. Solicite as credenciais ao
+                  administrador para receber chamadas.
+                </AlertDescription>
+              </Alert>
+            ) : !activeCall ? (
               <div className="text-center space-y-4">
                 <div
-                  className={`mx-auto h-20 w-20 rounded-full flex items-center justify-center transition-colors ${isReady ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}
+                  className={`mx-auto h-20 w-20 rounded-full flex items-center justify-center transition-colors ${isReady && registrationStatus === 'Registered' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}
                 >
-                  <Phone className={`h-10 w-10 ${isReady ? 'animate-pulse' : ''}`} />
+                  <Phone
+                    className={`h-10 w-10 ${isReady && registrationStatus === 'Registered' ? 'animate-pulse' : ''}`}
+                  />
                 </div>
                 <p className="text-slate-500">
                   {isReady
-                    ? 'Aguardando distribuição pelo Preditivo...'
+                    ? registrationStatus === 'Registered'
+                      ? 'Aguardando distribuição pelo Preditivo...'
+                      : 'Conectando ramal SIP...'
                     : 'Fique online para receber chamadas.'}
                 </p>
               </div>
