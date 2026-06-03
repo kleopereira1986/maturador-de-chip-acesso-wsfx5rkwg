@@ -25,7 +25,7 @@ export type Campaign = {
   name: string
   message_text: string
   media_url: string | null
-  media_type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO'
+  media_type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO' | 'DOCUMENT'
   status: 'AGUARDANDO' | 'DISPARANDO' | 'PAUSADO' | 'CONCLUIDO'
   min_delay: number
   max_delay: number

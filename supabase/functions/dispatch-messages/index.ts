@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
           payload = {
             number: cleanPhone,
             textMessage: { text: messageText },
-            options: { delay: delayMs },
+            options: { delay: delayMs, presence: 'composing' },
           }
         } else {
           if (!campaign.media_url || campaign.media_url.trim() === '') {
@@ -187,14 +187,18 @@ Deno.serve(async (req) => {
             mediaType = 'video'
           } else if (campaign.media_type === 'AUDIO') {
             mediaType = 'audio'
+          } else if (campaign.media_type === 'DOCUMENT') {
+            mediaType = 'document'
           }
 
           payload = {
             number: cleanPhone,
-            media: campaign.media_url,
-            mediaType: mediaType,
-            caption: messageText,
-            delay: delayMs,
+            options: { delay: delayMs, presence: 'composing' },
+            mediaMessage: {
+              mediatype: mediaType,
+              media: campaign.media_url,
+              caption: messageText,
+            },
           }
         }
 

@@ -459,6 +459,7 @@ export default function Campaigns() {
                     <SelectItem value="IMAGE">Imagem</SelectItem>
                     <SelectItem value="VIDEO">Vídeo</SelectItem>
                     <SelectItem value="AUDIO">Áudio (Gravado)</SelectItem>
+                    <SelectItem value="DOCUMENT">Documento</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -576,7 +577,8 @@ export default function Campaigns() {
                 !form.name ||
                 !form.message_text.trim() ||
                 isSaving ||
-                form.instance_ids.length === 0
+                form.instance_ids.length === 0 ||
+                (form.media_type !== 'TEXT' && !file && !form.media_url)
               }
             >
               {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
