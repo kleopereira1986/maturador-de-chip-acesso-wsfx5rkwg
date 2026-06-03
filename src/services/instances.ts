@@ -31,7 +31,7 @@ export const instancesService = {
     const { data: user } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('whatsapp_instances')
-      .insert({ name, token, owner_id: user.user?.id })
+      .insert({ name, token, status: 'DESCONECTADO', owner_id: user.user?.id })
       .select()
       .single()
     if (error) throw error

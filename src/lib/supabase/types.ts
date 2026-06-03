@@ -53,6 +53,27 @@ export type Database = {
           },
         ]
       }
+      configuracoes_api: {
+        Row: {
+          atualizado_em: string
+          global_api_key: string
+          id: string
+          url_servidor: string
+        }
+        Insert: {
+          atualizado_em?: string
+          global_api_key: string
+          id?: string
+          url_servidor?: string
+        }
+        Update: {
+          atualizado_em?: string
+          global_api_key?: string
+          id?: string
+          url_servidor?: string
+        }
+        Relationships: []
+      }
       dialer_queue: {
         Row: {
           created_at: string
@@ -402,6 +423,11 @@ export const Constants = {
 //   created_by: uuid (nullable)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+// Table: configuracoes_api
+//   id: uuid (not null, default: gen_random_uuid())
+//   url_servidor: character varying (not null, default: 'https://api.primaziainvestimentos.com'::character varying)
+//   global_api_key: text (not null)
+//   atualizado_em: timestamp with time zone (not null, default: now())
 // Table: dialer_queue
 //   id: uuid (not null, default: gen_random_uuid())
 //   lead_name: text (nullable)
@@ -447,6 +473,8 @@ export const Constants = {
 // Table: campaigns
 //   FOREIGN KEY campaigns_created_by_fkey: FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE CASCADE
 //   PRIMARY KEY campaigns_pkey: PRIMARY KEY (id)
+// Table: configuracoes_api
+//   PRIMARY KEY configuracoes_api_pkey: PRIMARY KEY (id)
 // Table: dialer_queue
 //   PRIMARY KEY dialer_queue_pkey: PRIMARY KEY (id)
 // Table: dispatch_queue
@@ -466,6 +494,10 @@ export const Constants = {
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: campaigns
 //   Policy "Campaigns Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+// Table: configuracoes_api
+//   Policy "Configuracoes API Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: dialer_queue

@@ -13,7 +13,7 @@ export type WhatsappInstance = {
   id: string
   name: string
   token: string
-  status: 'CONECTADO' | 'DESCONECTADO' | 'PAUSADO'
+  status: 'CONECTADO' | 'DESCONECTADO' | 'PAUSADO' | 'CONECTANDO'
   owner_id: string
   created_at: string
   updated_at: string

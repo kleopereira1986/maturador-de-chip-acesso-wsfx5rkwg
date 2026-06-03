@@ -23,14 +23,14 @@ Deno.serve(async (req) => {
       const instanceName = body.instance
       const state = body.data?.state
 
-      let newStatus = 'DESCONECTADO'
+      let newStatus = 'CONECTANDO'
       if (state === 'open') newStatus = 'CONECTADO'
-      else if (state === 'connecting') newStatus = 'PAUSADO'
+      else if (state === 'close') newStatus = 'DESCONECTADO'
 
       if (instanceName) {
         await supabase
           .from('whatsapp_instances')
-          .update({ status: newStatus })
+          .update({ status: newStatus, updated_at: new Date().toISOString() })
           .eq('name', instanceName)
       }
     }

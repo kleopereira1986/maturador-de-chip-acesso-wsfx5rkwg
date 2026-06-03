@@ -15,14 +15,20 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Instances() {
   const [instances, setInstances] = useState<WhatsappInstance[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+
+  const [qrModalOpen, setQrModalOpen] = useState(false)
+  const [qrBase64, setQrBase64] = useState('')
+  const [pollingInstance, setPollingInstance] = useState<string | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+
   const [name, setName] = useState('')
-  const [token, setToken] = useState('')
 
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
   const [globalApiKey, setGlobalApiKey] = useState('')
@@ -31,7 +37,6 @@ export default function Instances() {
   const { toast } = useToast()
 
   const fetchInstances = async () => {
-    setIsLoading(true)
     try {
       const data = await instancesService.getInstances()
       setInstances(data)
@@ -57,25 +62,150 @@ export default function Instances() {
   useEffect(() => {
     fetchInstances()
     loadConfig()
+
+    const channel = supabase
+      .channel('whatsapp_instances_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_instances' }, () => {
+        fetchInstances()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    if (qrModalOpen && pollingInstance && urlServidor && globalApiKey) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${urlServidor}/instance/connectionState/${pollingInstance}`, {
+            headers: { apikey: globalApiKey },
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data?.instance?.state === 'open') {
+              setQrModalOpen(false)
+              setPollingInstance(null)
+              toast({ title: 'Sucesso', description: 'Instância conectada com sucesso!' })
+              fetchInstances()
+            }
+          }
+        } catch (error) {
+          console.error('Erro ao verificar status:', error)
+        }
+      }, 5000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [qrModalOpen, pollingInstance, urlServidor, globalApiKey, toast])
+
+  const generateToken = () =>
+    Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+
   const handleCreate = async () => {
+    if (!urlServidor || !globalApiKey) {
+      toast({
+        title: 'Aviso',
+        description: 'Configure a API Global primeiro nas Configurações.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsCreating(true)
     try {
-      await instancesService.createInstance(name, token)
+      const token = generateToken()
+      const instanceNameWithoutSpaces = name.replace(/\s+/g, '-')
+
+      const createRes = await fetch(`${urlServidor}/instance/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: globalApiKey,
+        },
+        body: JSON.stringify({
+          instanceName: instanceNameWithoutSpaces,
+          token: token,
+          qrcode: true,
+        }),
+      })
+
+      if (!createRes.ok) {
+        const errData = await createRes.json().catch(() => null)
+        throw new Error(
+          errData?.response?.message?.[0] || 'Falha ao criar instância na API Evolution',
+        )
+      }
+
+      const createData = await createRes.json()
+
+      await instancesService.createInstance(instanceNameWithoutSpaces, token)
+
       toast({ title: 'Sucesso', description: 'Instância criada' })
+      setName('')
       setIsModalOpen(false)
+
+      if (createData.qrcode && createData.qrcode.base64) {
+        setQrBase64(createData.qrcode.base64)
+        setPollingInstance(instanceNameWithoutSpaces)
+        setQrModalOpen(true)
+      }
+
       fetchInstances()
-    } catch {
-      toast({ title: 'Erro', description: 'Erro ao criar instância', variant: 'destructive' })
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    } finally {
+      setIsCreating(false)
     }
   }
 
-  const handleDelete = async (id: string) => {
+  const handleConnectExisting = async (instanceName: string) => {
+    if (!urlServidor || !globalApiKey) {
+      toast({
+        title: 'Aviso',
+        description: 'Configure a API Global primeiro nas Configurações.',
+        variant: 'destructive',
+      })
+      return
+    }
     try {
+      toast({ title: 'Conectando...', description: 'Solicitando QR Code...' })
+      const res = await fetch(`${urlServidor}/instance/connect/${instanceName}`, {
+        headers: { apikey: globalApiKey },
+      })
+      if (!res.ok) throw new Error('Falha ao conectar')
+      const data = await res.json()
+
+      if (data.base64) {
+        setQrBase64(data.base64)
+        setPollingInstance(instanceName)
+        setQrModalOpen(true)
+      } else if (data.instance?.state === 'open') {
+        toast({ title: 'Aviso', description: 'Esta instância já está conectada.' })
+      } else {
+        throw new Error('QR Code não retornado pela API.')
+      }
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+    }
+  }
+
+  const handleDelete = async (id: string, instanceName: string) => {
+    try {
+      if (urlServidor && globalApiKey) {
+        await fetch(`${urlServidor}/instance/delete/${instanceName}`, {
+          method: 'DELETE',
+          headers: { apikey: globalApiKey },
+        }).catch(() => null)
+      }
+
       await instancesService.deleteInstance(id)
       fetchInstances()
     } catch {
-      toast({ title: 'Erro', variant: 'destructive' })
+      toast({ title: 'Erro', description: 'Erro ao excluir instância', variant: 'destructive' })
     }
   }
 
@@ -110,6 +240,8 @@ export default function Instances() {
         return <Badge className="bg-red-500">Desconectado</Badge>
       case 'PAUSADO':
         return <Badge className="bg-yellow-500">Pausado</Badge>
+      case 'CONECTANDO':
+        return <Badge className="bg-blue-500 animate-pulse">Conectando...</Badge>
       default:
         return <Badge variant="secondary">{status}</Badge>
     }
@@ -158,19 +290,14 @@ export default function Instances() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      toast({
-                        title: 'QR Code',
-                        description: 'Escaneie o QR Code na API Evolution.',
-                      })
-                    }
+                    onClick={() => handleConnectExisting(instance.name)}
                   >
                     <QrCode className="mr-2 h-4 w-4" /> Conectar
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(instance.id)}
+                    onClick={() => handleDelete(instance.id, instance.name)}
                     className="text-red-500 hover:text-red-700"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -186,7 +313,7 @@ export default function Instances() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Nova Instância</DialogTitle>
-            <DialogDescription>Adicione as credenciais da Evolution API.</DialogDescription>
+            <DialogDescription>Digite um nome para criar a nova instância.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -194,25 +321,60 @@ export default function Instances() {
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex: Financeiro"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Token da API</label>
-              <Input
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Token Global / Instância"
-                type="password"
+                placeholder="Ex: Chip Comercial 01"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)}>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isCreating}>
               Cancelar
             </Button>
-            <Button onClick={handleCreate} disabled={!name || !token}>
+            <Button onClick={handleCreate} disabled={!name || isCreating}>
+              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={qrModalOpen} onOpenChange={setQrModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Conectar Instância</DialogTitle>
+            <DialogDescription>
+              Escaneie o QR Code abaixo com seu WhatsApp para conectar a instância {pollingInstance}
+              .
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center p-6 space-y-4">
+            {qrBase64 ? (
+              <img
+                src={
+                  qrBase64.startsWith('data:image') ? qrBase64 : `data:image/png;base64,${qrBase64}`
+                }
+                alt="QR Code do WhatsApp"
+                className="w-64 h-64 rounded-md border p-2"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-64 h-64 bg-slate-100 rounded-md">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+              </div>
+            )}
+            <div className="flex items-center text-sm text-slate-500 gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Aguardando leitura do QR Code...
+            </div>
+          </div>
+          <DialogFooter className="sm:justify-start">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setQrModalOpen(false)
+                setPollingInstance(null)
+              }}
+            >
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
