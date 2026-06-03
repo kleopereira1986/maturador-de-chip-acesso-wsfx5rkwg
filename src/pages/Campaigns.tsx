@@ -25,7 +25,15 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
-import { Play, Pause, Plus, Trash2, Loader2, Edit, UploadCloud } from 'lucide-react'
+import { Play, Pause, Plus, Trash2, Loader2, Edit, UploadCloud, AlertCircle } from 'lucide-react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 
@@ -54,6 +62,27 @@ export default function Campaigns() {
   const [form, setForm] = useState(defaultForm)
   const [file, setFile] = useState<File | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
+
+  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false)
+  const [campaignErrors, setCampaignErrors] = useState<any[]>([])
+  const [isLoadingErrors, setIsLoadingErrors] = useState(false)
+
+  const openErrorLog = async (campaignId: string) => {
+    setIsErrorModalOpen(true)
+    setIsLoadingErrors(true)
+    try {
+      const errors = await campaignsService.getCampaignErrors(campaignId)
+      setCampaignErrors(errors)
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: 'Falha ao carregar log de erros.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsLoadingErrors(false)
+    }
+  }
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -300,6 +329,17 @@ export default function Campaigns() {
                       </CardDescription>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
+                      {s.failed > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openErrorLog(c.id)}
+                          className="text-orange-500 hover:text-orange-700 hover:bg-orange-50"
+                          title="Ver Erros"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -534,6 +574,62 @@ export default function Campaigns() {
               {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
               {editingId ? 'Salvar Alterações' : 'Criar Campanha'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isErrorModalOpen} onOpenChange={setIsErrorModalOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Log de Erros</DialogTitle>
+            <DialogDescription>Relatório de falhas nos disparos desta campanha.</DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4">
+            {isLoadingErrors ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : campaignErrors.length === 0 ? (
+              <div className="text-center text-slate-500 py-8 bg-slate-50 border rounded-md">
+                Nenhum erro registrado para esta campanha.
+              </div>
+            ) : (
+              <div className="border rounded-md overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Lead</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>Erro</TableHead>
+                      <TableHead>Data/Hora</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {campaignErrors.map((err) => (
+                      <TableRow key={err.id}>
+                        <TableCell className="font-medium text-xs">
+                          {err.lead_name || '-'}
+                        </TableCell>
+                        <TableCell className="text-xs">{err.phone}</TableCell>
+                        <TableCell
+                          className="text-xs text-red-600 max-w-[300px] truncate"
+                          title={err.error_message}
+                        >
+                          {err.error_message || 'Erro desconhecido'}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {new Date(err.updated_at).toLocaleString('pt-BR')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsErrorModalOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

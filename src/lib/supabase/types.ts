@@ -724,7 +724,10 @@ export const Constants = {
 //     IF NEW.status = 'DISPARANDO' AND (OLD.status IS NULL OR OLD.status != 'DISPARANDO') THEN
 //       BEGIN
 //         PERFORM net.http_post(
-//           url := 'https://uidafexgwtplfnjrgoyi.supabase.co/functions/v1/dispatch-messages',
+//           url := COALESCE(
+//             current_setting('app.settings.supabase_url', true),
+//             'https://uidafexgwtplfnjrgoyi.supabase.co'
+//           ) || '/functions/v1/dispatch-messages',
 //           headers := '{"Content-Type": "application/json"}'::jsonb,
 //           body := jsonb_build_object('campaign_id', NEW.id)
 //         );

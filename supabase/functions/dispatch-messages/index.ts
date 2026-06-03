@@ -129,6 +129,12 @@ Deno.serve(async (req) => {
 
         const messageText = parseMessage(campaign.message_text, item.lead_name)
 
+        // Automated Phone Cleaning
+        let cleanPhone = item.phone.replace(/\D/g, '')
+        if (!cleanPhone.startsWith('55') && cleanPhone.length <= 11) {
+          cleanPhone = '55' + cleanPhone
+        }
+
         let evolutionEndpoint = ''
         let payload: any = {}
         const delayMs =
@@ -140,25 +146,27 @@ Deno.serve(async (req) => {
         if (campaign.media_type === 'TEXT') {
           evolutionEndpoint = `/message/sendText/${instance.name}`
           payload = {
-            number: item.phone,
+            number: cleanPhone,
             text: messageText,
             delay: delayMs,
           }
         } else {
           evolutionEndpoint = `/message/sendMedia/${instance.name}`
           let mediatype = 'image'
-          if (campaign.media_type === 'VIDEO') mediatype = 'video'
-          if (campaign.media_type === 'AUDIO') mediatype = 'audio'
+          let mimetype = 'image/jpeg'
+
+          if (campaign.media_type === 'VIDEO') {
+            mediatype = 'video'
+            mimetype = 'video/mp4'
+          } else if (campaign.media_type === 'AUDIO') {
+            mediatype = 'audio'
+            mimetype = 'audio/mpeg'
+          }
 
           payload = {
-            number: item.phone,
+            number: cleanPhone,
             mediatype: mediatype,
-            mimetype:
-              campaign.media_type === 'VIDEO'
-                ? 'video/mp4'
-                : campaign.media_type === 'AUDIO'
-                  ? 'audio/mpeg'
-                  : 'image/jpeg',
+            mimetype: mimetype,
             media: campaign.media_url,
             caption: messageText,
             delay: delayMs,
@@ -170,7 +178,7 @@ Deno.serve(async (req) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              apikey: instance.token || config.global_api_key,
+              apikey: config.global_api_key || instance.token,
             },
             body: JSON.stringify(payload),
           })
@@ -178,22 +186,30 @@ Deno.serve(async (req) => {
           if (res.status === 200 || res.status === 201) {
             await supabase
               .from('dispatch_queue')
-              .update({ status: 'SENT', instance_id: instance.id })
+              .update({ status: 'SENT', instance_id: instance.id, phone: cleanPhone })
               .eq('id', item.id)
           } else {
             const errorData = await res.text()
             await supabase
               .from('dispatch_queue')
-              .update({ status: 'ERROR', error_message: `API Error ${res.status}: ${errorData}` })
+              .update({
+                status: 'ERROR',
+                error_message: `API Error ${res.status}: ${errorData}`,
+                phone: cleanPhone,
+              })
               .eq('id', item.id)
-            console.error(`Evolution API Error for ${item.phone}:`, errorData)
+            console.error(`Evolution API Error for ${cleanPhone}:`, errorData)
           }
         } catch (err: any) {
           await supabase
             .from('dispatch_queue')
-            .update({ status: 'ERROR', error_message: `Fetch Error: ${err.message}` })
+            .update({
+              status: 'ERROR',
+              error_message: `Fetch Error: ${err.message}`,
+              phone: cleanPhone,
+            })
             .eq('id', item.id)
-          console.error(`Fetch Error for ${item.phone}:`, err)
+          console.error(`Fetch Error for ${cleanPhone}:`, err)
         }
         totalProcessed++
       }
