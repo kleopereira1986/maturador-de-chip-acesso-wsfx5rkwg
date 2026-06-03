@@ -16,23 +16,35 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const supabase = createClient(supabaseUrl, supabaseKey)
 
+  let reqBody: any = {}
+  try {
+    if (req.body) {
+      reqBody = await req.json()
+    }
+  } catch (e) {
+    console.warn('Could not parse request body')
+  }
+
   try {
     const { data: config } = await supabase
       .from('configuracoes_api')
       .select('*')
       .limit(1)
       .maybeSingle()
-    if (!config || !config.url_servidor || !config.global_api_key) {
+    if (!config || !config.url_servidor) {
       console.warn('API config not found')
       return new Response(JSON.stringify({ message: 'API config not found' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const { data: campaigns } = await supabase
-      .from('campaigns')
-      .select('*')
-      .eq('status', 'DISPARANDO')
+    let campaignsQuery = supabase.from('campaigns').select('*').eq('status', 'DISPARANDO')
+
+    if (reqBody?.campaign_id) {
+      campaignsQuery = campaignsQuery.eq('id', reqBody.campaign_id)
+    }
+
+    const { data: campaigns } = await campaignsQuery
 
     if (!campaigns || campaigns.length === 0) {
       return new Response(JSON.stringify({ message: 'No active campaigns' }), {
@@ -158,7 +170,7 @@ Deno.serve(async (req) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              apikey: config.global_api_key,
+              apikey: instance.token || config.global_api_key,
             },
             body: JSON.stringify(payload),
           })
@@ -192,6 +204,9 @@ Deno.serve(async (req) => {
       fetch(`${supabaseUrl}/functions/v1/dispatch-messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: reqBody?.campaign_id
+          ? JSON.stringify({ campaign_id: reqBody.campaign_id })
+          : undefined,
       }).catch(console.error)
     }
 
