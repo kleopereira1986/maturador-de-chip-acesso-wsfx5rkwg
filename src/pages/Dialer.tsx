@@ -73,7 +73,7 @@ export default function Dialer() {
         return
       }
 
-      const wssUrl = import.meta.env.VITE_RTC_WSS_URL || 'wss://rtc.imobixcrm.com:8089/ws'
+      const wssUrl = import.meta.env.VITE_RTC_WSS_URL || 'wss://rtc.imobixcrm.com/ws'
 
       try {
         const ua = new UserAgent({
