@@ -75,3 +75,14 @@ export type ConfiguracoesApi = {
   global_api_key: string
   atualizado_em: string
 }
+
+export type WhatsappMessage = {
+  id: string
+  instance_id: string
+  contact_phone: string
+  contact_name: string | null
+  message_body: string
+  direction: 'incoming' | 'outgoing'
+  is_responded: boolean
+  created_at: string
+}

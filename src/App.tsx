@@ -12,6 +12,7 @@ import Instances from './pages/Instances'
 import Campaigns from './pages/Campaigns'
 import Maturador from './pages/Maturador'
 import Dialer from './pages/Dialer'
+import Interacoes from './pages/Interacoes'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/instancias" element={<Instances />} />
               <Route path="/campanhas" element={<Campaigns />} />
               <Route path="/discador" element={<Dialer />} />
+              <Route path="/interacoes" element={<Interacoes />} />
 
               {/* Role Restricted Routes */}
               <Route element={<ProtectedRoute allowedRoles={['master', 'gerente']} />}>
