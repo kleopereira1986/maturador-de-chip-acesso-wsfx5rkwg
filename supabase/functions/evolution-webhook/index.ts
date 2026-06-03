@@ -17,9 +17,10 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
+    const event = body.event?.toLowerCase()
 
     // Evolution API webhook payload for messages
-    if (body.event === 'messages.upsert') {
+    if (event === 'messages.upsert' || event === 'messages_upsert') {
       const instanceName = body.instance
       const msgData = body.data?.message
       const key = body.data?.key
@@ -29,7 +30,12 @@ Deno.serve(async (req) => {
         if (remoteJid && remoteJid.includes('@s.whatsapp.net')) {
           const contactPhone = remoteJid.split('@')[0]
           const contactName = body.data?.pushName || ''
-          const messageBody = msgData.conversation || msgData.extendedTextMessage?.text || ''
+          const messageBody =
+            msgData.conversation ||
+            msgData.extendedTextMessage?.text ||
+            msgData.imageMessage?.caption ||
+            msgData.videoMessage?.caption ||
+            ''
 
           if (messageBody && instanceName) {
             const { data: instance } = await supabase
@@ -54,7 +60,7 @@ Deno.serve(async (req) => {
     }
 
     // Evolution API webhook payload for connection
-    if (body.event === 'connection.update') {
+    if (event === 'connection.update' || event === 'connection_update') {
       const instanceName = body.instance
       const state = body.data?.state
 

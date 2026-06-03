@@ -25,6 +25,11 @@ export default function Interacoes() {
   const [isSending, setIsSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const [instancesMap, setInstancesMap] = useState<Record<string, WhatsappInstance>>({})
+  const selectedContactRef = useRef(selectedContact)
+
+  useEffect(() => {
+    selectedContactRef.current = selectedContact
+  }, [selectedContact])
 
   useEffect(() => {
     fetchInstances()
@@ -34,8 +39,8 @@ export default function Interacoes() {
       .channel('whatsapp_messages_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, () => {
         fetchPending()
-        if (selectedContact) {
-          fetchMessages(selectedContact.instance_id, selectedContact.phone)
+        if (selectedContactRef.current) {
+          fetchMessages(selectedContactRef.current.instance_id, selectedContactRef.current.phone)
         }
       })
       .subscribe()
