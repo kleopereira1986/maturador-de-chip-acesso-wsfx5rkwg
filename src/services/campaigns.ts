@@ -87,13 +87,22 @@ export const campaignsService = {
     const { error } = await supabase.from('dispatch_queue').insert(payload)
     if (error) throw error
   },
-  async getCampaignErrors(campaignId: string) {
-    const { data, error } = await supabase
+  async getCampaignLogs(campaignId: string, statusFilter: string = 'ALL') {
+    let query = supabase
       .from('dispatch_queue')
       .select('id, lead_name, phone, status, error_message, updated_at')
       .eq('campaign_id', campaignId)
-      .in('status', ['ERROR', 'FAILED'])
       .order('updated_at', { ascending: false })
+
+    if (statusFilter && statusFilter !== 'ALL') {
+      if (statusFilter === 'ERRORS') {
+        query = query.in('status', ['ERROR', 'FAILED'])
+      } else {
+        query = query.eq('status', statusFilter)
+      }
+    }
+
+    const { data, error } = await query
     if (error) throw error
     return data
   },

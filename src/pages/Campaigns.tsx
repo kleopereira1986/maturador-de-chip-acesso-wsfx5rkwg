@@ -27,7 +27,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
-import { Play, Pause, Plus, Trash2, Loader2, Edit, UploadCloud, AlertCircle } from 'lucide-react'
+import { Play, Pause, Plus, Trash2, Loader2, Edit, UploadCloud, List } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -65,26 +65,39 @@ export default function Campaigns() {
   const [file, setFile] = useState<File | null>(null)
   const [csvFile, setCsvFile] = useState<File | null>(null)
 
-  const [isErrorModalOpen, setIsErrorModalOpen] = useState(false)
-  const [campaignErrors, setCampaignErrors] = useState<any[]>([])
-  const [isLoadingErrors, setIsLoadingErrors] = useState(false)
+  const [isLogsModalOpen, setIsLogsModalOpen] = useState(false)
+  const [campaignLogs, setCampaignLogs] = useState<any[]>([])
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false)
+  const [logStatusFilter, setLogStatusFilter] = useState('ALL')
+  const [selectedLogCampaignId, setSelectedLogCampaignId] = useState<string | null>(null)
 
-  const openErrorLog = async (campaignId: string) => {
-    setIsErrorModalOpen(true)
-    setIsLoadingErrors(true)
+  const fetchLogs = async (campaignId: string, filter: string) => {
+    setIsLoadingLogs(true)
     try {
-      const errors = await campaignsService.getCampaignErrors(campaignId)
-      setCampaignErrors(errors)
+      const logs = await campaignsService.getCampaignLogs(campaignId, filter)
+      setCampaignLogs(logs)
     } catch (error: any) {
       toast({
         title: 'Erro',
-        description: 'Falha ao carregar log de erros.',
+        description: 'Falha ao carregar logs.',
         variant: 'destructive',
       })
     } finally {
-      setIsLoadingErrors(false)
+      setIsLoadingLogs(false)
     }
   }
+
+  const openLogs = (campaignId: string) => {
+    setSelectedLogCampaignId(campaignId)
+    setLogStatusFilter('ALL')
+    setIsLogsModalOpen(true)
+  }
+
+  useEffect(() => {
+    if (isLogsModalOpen && selectedLogCampaignId) {
+      fetchLogs(selectedLogCampaignId, logStatusFilter)
+    }
+  }, [isLogsModalOpen, selectedLogCampaignId, logStatusFilter])
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -338,17 +351,15 @@ export default function Campaigns() {
                           </CardDescription>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
-                          {s.failed > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openErrorLog(c.id)}
-                              className="text-orange-500 hover:text-orange-700 hover:bg-orange-50"
-                              title="Ver Erros"
-                            >
-                              <AlertCircle className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openLogs(c.id)}
+                            className="text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                            title="Ver Logs"
+                          >
+                            <List className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -367,17 +378,16 @@ export default function Campaigns() {
                       <div className="space-y-4">
                         <div>
                           <div className="flex justify-between mb-1 text-xs">
-                            <span className="font-medium text-slate-700">Envios</span>
+                            <span className="font-medium text-slate-700">Progresso</span>
                             <span className="text-slate-500 font-medium">
-                              {s.sent} de {s.total} ({Math.round(progress)}%)
+                              {Math.round(progress)}% ({s.sent} / {s.total})
                             </span>
                           </div>
                           <Progress value={progress} className="h-2" />
                           <div className="flex justify-between mt-1 text-[10px] text-slate-500">
-                            <span>
-                              Pendentes: {s.pending} | Processando: {s.processing || 0}
-                            </span>
-                            <span className="text-red-500">Falhas: {s.failed}</span>
+                            <span className="text-emerald-600 font-medium">Sucesso: {s.sent}</span>
+                            <span className="text-red-500 font-medium">Falhas: {s.failed}</span>
+                            <span>Pendente: {s.pending}</span>
                           </div>
                         </div>
 
@@ -604,48 +614,80 @@ export default function Campaigns() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isErrorModalOpen} onOpenChange={setIsErrorModalOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+      <Dialog open={isLogsModalOpen} onOpenChange={setIsLogsModalOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle>Log de Erros</DialogTitle>
-            <DialogDescription>Relatório de falhas nos disparos desta campanha.</DialogDescription>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <DialogTitle>Logs da Campanha</DialogTitle>
+                <DialogDescription>Relatório detalhado de envios e falhas.</DialogDescription>
+              </div>
+              <Select value={logStatusFilter} onValueChange={setLogStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos os Registros</SelectItem>
+                  <SelectItem value="SENT">Apenas Sucesso</SelectItem>
+                  <SelectItem value="ERRORS">Apenas Falhas</SelectItem>
+                  <SelectItem value="PENDING">Pendentes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </DialogHeader>
 
-          <div className="mt-4">
-            {isLoadingErrors ? (
+          <div className="flex-1 overflow-y-auto mt-4 min-h-[300px]">
+            {isLoadingLogs ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : campaignErrors.length === 0 ? (
+            ) : campaignLogs.length === 0 ? (
               <div className="text-center text-slate-500 py-8 bg-slate-50 border rounded-md">
-                Nenhum erro registrado para esta campanha.
+                Nenhum registro encontrado para este filtro.
               </div>
             ) : (
               <div className="border rounded-md overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Status</TableHead>
                       <TableHead>Lead</TableHead>
                       <TableHead>Telefone</TableHead>
-                      <TableHead>Erro</TableHead>
-                      <TableHead>Data/Hora</TableHead>
+                      <TableHead>Detalhes</TableHead>
+                      <TableHead>Atualizado em</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {campaignErrors.map((err) => (
-                      <TableRow key={err.id}>
+                    {campaignLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell>
+                          {log.status === 'SENT' ? (
+                            <Badge className="bg-emerald-500 hover:bg-emerald-600">Enviado</Badge>
+                          ) : log.status === 'ERROR' || log.status === 'FAILED' ? (
+                            <Badge variant="destructive">Falhou</Badge>
+                          ) : log.status === 'PROCESSING' ? (
+                            <Badge className="bg-blue-500 hover:bg-blue-600">Processando</Badge>
+                          ) : (
+                            <Badge
+                              variant="secondary"
+                              className="text-amber-600 bg-amber-100 hover:bg-amber-200"
+                            >
+                              Pendente
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="font-medium text-xs">
-                          {err.lead_name || '-'}
+                          {log.lead_name || '-'}
                         </TableCell>
-                        <TableCell className="text-xs">{err.phone}</TableCell>
+                        <TableCell className="text-xs">{log.phone}</TableCell>
                         <TableCell
-                          className="text-xs text-red-600 max-w-[300px] truncate font-mono"
-                          title={err.error_message}
+                          className="text-xs max-w-[200px] truncate text-slate-500 font-mono"
+                          title={log.error_message || ''}
                         >
-                          {err.error_message || 'Erro desconhecido'}
+                          {log.error_message || '-'}
                         </TableCell>
-                        <TableCell className="text-xs text-slate-500">
-                          {new Date(err.updated_at).toLocaleString('pt-BR')}
+                        <TableCell className="text-xs text-slate-500 whitespace-nowrap">
+                          {new Date(log.updated_at).toLocaleString('pt-BR')}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -654,8 +696,8 @@ export default function Campaigns() {
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button onClick={() => setIsErrorModalOpen(false)}>Fechar</Button>
+          <DialogFooter className="mt-4 pt-4 border-t">
+            <Button onClick={() => setIsLogsModalOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
