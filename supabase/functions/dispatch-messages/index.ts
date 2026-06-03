@@ -134,7 +134,10 @@ Deno.serve(async (req) => {
         if (!messageText) {
           await supabase
             .from('dispatch_queue')
-            .update({ status: 'FAILED', error_message: 'Mensagem vazia após processamento' })
+            .update({
+              status: 'ERROR',
+              error_message: JSON.stringify({ error: 'Mensagem vazia após processamento' }),
+            })
             .eq('id', item.id)
           totalProcessed++
           continue
@@ -142,7 +145,7 @@ Deno.serve(async (req) => {
 
         // Automated Phone Cleaning
         let cleanPhone = item.phone.replace(/\D/g, '')
-        if (!cleanPhone.startsWith('55') && cleanPhone.length <= 11) {
+        if (!cleanPhone.startsWith('55')) {
           cleanPhone = '55' + cleanPhone
         }
 
@@ -160,27 +163,21 @@ Deno.serve(async (req) => {
             number: cleanPhone,
             textMessage: { text: messageText },
             options: { delay: delayMs },
-            text: messageText,
-            delay: delayMs,
           }
         } else {
           evolutionEndpoint = `/message/sendMedia/${instance.name}`
-          let mediatype = 'image'
-          let mimetype = 'image/jpeg'
+          let mediaType = 'image'
 
           if (campaign.media_type === 'VIDEO') {
-            mediatype = 'video'
-            mimetype = 'video/mp4'
+            mediaType = 'video'
           } else if (campaign.media_type === 'AUDIO') {
-            mediatype = 'audio'
-            mimetype = 'audio/mpeg'
+            mediaType = 'audio'
           }
 
           payload = {
             number: cleanPhone,
-            mediatype: mediatype,
-            mimetype: mimetype,
             media: campaign.media_url,
+            mediaType: mediaType,
             caption: messageText,
             delay: delayMs,
           }
@@ -202,10 +199,17 @@ Deno.serve(async (req) => {
               .update({ status: 'SENT', instance_id: instance.id, phone: cleanPhone })
               .eq('id', item.id)
           } else {
-            const errorData = await res.text()
+            const errorText = await res.text()
+            let errorData = errorText
+            try {
+              const parsed = JSON.parse(errorText)
+              errorData = JSON.stringify(parsed)
+            } catch (e) {
+              // Not JSON
+            }
             await supabase
               .from('dispatch_queue')
-              .update({ status: 'FAILED', error_message: errorData, phone: cleanPhone })
+              .update({ status: 'ERROR', error_message: errorData, phone: cleanPhone })
               .eq('id', item.id)
             console.error(`Evolution API Error for ${cleanPhone}:`, errorData)
           }
@@ -213,8 +217,8 @@ Deno.serve(async (req) => {
           await supabase
             .from('dispatch_queue')
             .update({
-              status: 'FAILED',
-              error_message: `Fetch Error: ${err.message}`,
+              status: 'ERROR',
+              error_message: JSON.stringify({ error: 'Fetch Error', message: err.message }),
               phone: cleanPhone,
             })
             .eq('id', item.id)

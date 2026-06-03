@@ -621,7 +621,7 @@ export default function Campaigns() {
                         </TableCell>
                         <TableCell className="text-xs">{err.phone}</TableCell>
                         <TableCell
-                          className="text-xs text-red-600 max-w-[300px] truncate"
+                          className="text-xs text-red-600 max-w-[300px] truncate font-mono"
                           title={err.error_message}
                         >
                           {err.error_message || 'Erro desconhecido'}
