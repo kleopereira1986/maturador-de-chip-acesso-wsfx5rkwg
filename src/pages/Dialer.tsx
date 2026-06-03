@@ -5,9 +5,11 @@ import { Switch } from '@/components/ui/switch'
 import { Phone, PhoneOff, User, Mic, AlertCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { useToast } from '@/hooks/use-toast'
 
 export default function Dialer() {
   const { profile } = useAuth()
+  const { toast } = useToast()
   const [isReady, setIsReady] = useState(false)
   const [activeCall, setActiveCall] = useState<any>(null)
   const [callDuration, setCallDuration] = useState(0)
@@ -56,11 +58,14 @@ export default function Dialer() {
         }
 
         ws.onerror = () => {
-          console.warn('Asterisk WSS Connection Failed, falling back to mock simulator.')
+          console.warn('Asterisk WSS Connection Failed.')
           setRegistrationStatus('Error')
-
-          // Fallback to registered for UI demonstration purposes
-          setTimeout(() => setRegistrationStatus('Registered'), 1000)
+          setIsReady(false)
+          toast({
+            title: 'Erro de Conexão SIP',
+            description: 'Falha ao conectar ao servidor WebRTC. Verifique SSL ou credenciais.',
+            variant: 'destructive',
+          })
         }
 
         ws.onclose = () => {
@@ -69,19 +74,24 @@ export default function Dialer() {
       } catch (e) {
         console.warn('Invalid WSS URL', e)
         setRegistrationStatus('Error')
-        setTimeout(() => setRegistrationStatus('Registered'), 1000)
+        setIsReady(false)
+        toast({
+          title: 'Erro de URL',
+          description: 'A URL do servidor WSS é inválida.',
+          variant: 'destructive',
+        })
       }
 
-      // Simulate incoming bridged call fallback if WSS doesn't provide one
+      // Simulate incoming bridged call fallback if WSS doesn't provide one (for testing)
       timer = setTimeout(() => {
-        if (!activeCall && isReady) {
+        if (!activeCall && isReady && registrationStatus === 'Registered') {
           setActiveCall({
             leadName: 'João da Silva',
             phone: '+55 11 99999-9999',
             status: 'CONECTADO',
           })
         }
-      }, 5000)
+      }, 8000)
     } else if (!isReady) {
       setRegistrationStatus('Disconnected')
     }

@@ -30,14 +30,16 @@ const App = () => (
             <Route element={<Layout />}>
               <Route path="/dashboard" element={<Dashboard />} />
 
+              {/* Common Routes */}
+              <Route path="/instancias" element={<Instances />} />
+              <Route path="/campanhas" element={<Campaigns />} />
+              <Route path="/discador" element={<Dialer />} />
+
               {/* Role Restricted Routes */}
               <Route element={<ProtectedRoute allowedRoles={['master', 'gerente']} />}>
                 <Route path="/usuarios" element={<Users />} />
-                <Route path="/instancias" element={<Instances />} />
-                <Route path="/campanhas" element={<Campaigns />} />
                 <Route path="/maturador" element={<Maturador />} />
               </Route>
-              <Route path="/discador" element={<Dialer />} />
             </Route>
           </Route>
 

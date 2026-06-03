@@ -16,8 +16,12 @@ import {
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/use-auth'
 
 export default function Instances() {
+  const { profile } = useAuth()
+  const canManageConfig = profile?.role === 'master' || profile?.role === 'gerente'
+
   const [instances, setInstances] = useState<WhatsappInstance[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -189,7 +193,11 @@ export default function Instances() {
         throw new Error('QR Code não retornado pela API.')
       }
     } catch (e: any) {
-      toast({ title: 'Erro', description: e.message, variant: 'destructive' })
+      toast({
+        title: 'Erro na API WhatsApp',
+        description: e.message || 'Servidor Evolution API inacessível.',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -255,9 +263,11 @@ export default function Instances() {
           <p className="text-slate-500">Gerencie suas conexões da Evolution API.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsConfigModalOpen(true)}>
-            <Settings className="mr-2 h-4 w-4" /> Configurações Globais API
-          </Button>
+          {canManageConfig && (
+            <Button variant="outline" onClick={() => setIsConfigModalOpen(true)}>
+              <Settings className="mr-2 h-4 w-4" /> Configurações Globais API
+            </Button>
+          )}
           <Button onClick={() => setIsModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Nova Instância
           </Button>

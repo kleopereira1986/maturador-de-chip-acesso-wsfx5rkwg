@@ -577,6 +577,15 @@ export const Constants = {
 //     USING: (get_my_role() = 'master'::text)
 //     WITH CHECK: (get_my_role() = 'master'::text)
 // Table: whatsapp_instances
+//   Policy "Instances Corretor delete self" (DELETE, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
+//   Policy "Instances Corretor insert self" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
+//   Policy "Instances Corretor select self" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
+//   Policy "Instances Corretor update self" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
 //   Policy "Instances Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))

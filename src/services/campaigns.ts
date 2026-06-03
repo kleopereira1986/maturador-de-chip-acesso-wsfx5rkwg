@@ -12,9 +12,30 @@ export const campaignsService = {
   },
   async createCampaign(campaign: Partial<Campaign>) {
     const { data: user } = await supabase.auth.getUser()
+
+    // Determine profile to enforce specific instance routing if it's a Corretor
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.user?.id)
+      .single()
+
+    let instanceIds = campaign.instance_ids || []
+
+    if (profile?.role === 'corretor') {
+      const { data: instances } = await supabase
+        .from('whatsapp_instances')
+        .select('id')
+        .eq('owner_id', user.user?.id)
+
+      if (instances && instances.length > 0) {
+        instanceIds = instances.map((i) => i.id)
+      }
+    }
+
     const { data, error } = await supabase
       .from('campaigns')
-      .insert({ ...campaign, created_by: user.user?.id })
+      .insert({ ...campaign, instance_ids: instanceIds, created_by: user.user?.id })
       .select()
       .single()
     if (error) throw error
