@@ -198,6 +198,9 @@ export type Database = {
           full_name: string
           id: string
           role: string
+          sip_domain: string | null
+          sip_extension: string | null
+          sip_password: string | null
           updated_at: string
         }
         Insert: {
@@ -206,6 +209,9 @@ export type Database = {
           full_name: string
           id: string
           role: string
+          sip_domain?: string | null
+          sip_extension?: string | null
+          sip_password?: string | null
           updated_at?: string
         }
         Update: {
@@ -214,6 +220,9 @@ export type Database = {
           full_name?: string
           id?: string
           role?: string
+          sip_domain?: string | null
+          sip_extension?: string | null
+          sip_password?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -495,6 +504,9 @@ export const Constants = {
 //   role: text (not null)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+//   sip_extension: text (nullable)
+//   sip_password: text (nullable)
+//   sip_domain: text (nullable)
 // Table: whatsapp_instances
 //   id: uuid (not null, default: gen_random_uuid())
 //   name: text (not null)

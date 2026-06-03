@@ -45,6 +45,11 @@ export default function Dashboard() {
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null)
   const [editForm, setEditForm] = useState({ message_text: '', media_url: '' })
 
+  const [isCreateInstOpen, setIsCreateInstOpen] = useState(false)
+  const [newInstName, setNewInstName] = useState('')
+  const [newInstToken, setNewInstToken] = useState('')
+  const [isCreatingInst, setIsCreatingInst] = useState(false)
+
   const loadDashboardData = async () => {
     setIsLoading(true)
     try {
@@ -65,6 +70,9 @@ export default function Dashboard() {
 
         const insts = await instancesService.getInstances()
         setInstances(insts)
+      } else if (profile?.role === 'corretor') {
+        const insts = await instancesService.getInstances()
+        setInstances(insts)
       }
     } catch (error) {
       console.error('Failed to load dashboard data', error)
@@ -76,7 +84,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadDashboardData()
 
-    if (profile?.role === 'master' || profile?.role === 'gerente') {
+    if (profile?.role === 'master' || profile?.role === 'gerente' || profile?.role === 'corretor') {
       const sub = supabase
         .channel('dashboard-changes')
         .on(
@@ -145,6 +153,38 @@ export default function Dashboard() {
       setEditCampaign(null)
     } catch {
       toast({ title: 'Erro', description: 'Erro ao atualizar.', variant: 'destructive' })
+    }
+  }
+
+  const handleCreateInstance = async () => {
+    if (!newInstName || !newInstToken) return
+    setIsCreatingInst(true)
+    try {
+      await instancesService.createInstance(newInstName, newInstToken)
+      toast({ title: 'Sucesso', description: 'Instância criada com sucesso.' })
+      setIsCreateInstOpen(false)
+      setNewInstName('')
+      setNewInstToken('')
+      loadDashboardData()
+    } catch (e: any) {
+      toast({
+        title: 'Erro',
+        description: e.message || 'Erro ao criar instância.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsCreatingInst(false)
+    }
+  }
+
+  const handleDeleteInstance = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta instância?')) return
+    try {
+      await instancesService.deleteInstance(id)
+      toast({ title: 'Sucesso', description: 'Instância excluída.' })
+      setInstances((prev) => prev.filter((i) => i.id !== id))
+    } catch (e: any) {
+      toast({ title: 'Erro', description: 'Erro ao excluir instância.', variant: 'destructive' })
     }
   }
 
@@ -305,26 +345,131 @@ export default function Dashboard() {
       )}
 
       {profile?.role === 'corretor' && (
-        <Card className="border-slate-200">
-          <CardHeader>
-            <CardTitle>Meu Perfil</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium text-slate-500">Nome</p>
-              <p className="text-lg text-slate-900">{profile.full_name}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Email</p>
-              <p className="text-lg text-slate-900">{profile.email}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Nível de Acesso</p>
-              <p className="text-lg text-slate-900 capitalize">{profile.role}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="border-slate-200 lg:col-span-1 h-fit">
+            <CardHeader>
+              <CardTitle>Meu Perfil</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Nome</p>
+                <p className="text-lg text-slate-900">{profile.full_name}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Email</p>
+                <p className="text-lg text-slate-900">{profile.email}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-slate-500">Nível de Acesso</p>
+                <p className="text-lg text-slate-900 capitalize">{profile.role}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 lg:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone className="h-5 w-5 text-green-600" />
+                  Minhas Instâncias
+                </CardTitle>
+                <CardDescription>Gerencie suas conexões de WhatsApp</CardDescription>
+              </div>
+              <Button onClick={() => setIsCreateInstOpen(true)} size="sm">
+                Nova Instância
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px]">
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[1, 2].map((i) => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : instances.length === 0 ? (
+                  <div className="text-center text-slate-500 py-10">
+                    Você ainda não possui instâncias.
+                  </div>
+                ) : (
+                  <div className="space-y-3 pr-4">
+                    {instances.map((inst) => (
+                      <div
+                        key={inst.id}
+                        className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-lg bg-slate-50/50 gap-4"
+                      >
+                        <div>
+                          <div className="font-medium text-sm text-slate-900 mb-1">{inst.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${inst.status === 'CONECTADO' ? 'bg-green-500' : inst.status === 'DESCONECTADO' ? 'bg-red-500' : 'bg-yellow-500'}`}
+                            />
+                            <span className="text-xs text-slate-500 font-medium">
+                              {inst.status}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              • Criado em {new Date(inst.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteInstance(inst.id)}
+                        >
+                          Excluir
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </div>
       )}
+
+      <Dialog open={isCreateInstOpen} onOpenChange={setIsCreateInstOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Nova Instância</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome da Instância</Label>
+              <Input
+                value={newInstName}
+                onChange={(e) => setNewInstName(e.target.value)}
+                placeholder="Ex: Meu WhatsApp"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Token da API</Label>
+              <Input
+                value={newInstToken}
+                onChange={(e) => setNewInstToken(e.target.value)}
+                placeholder="Ex: token123"
+                type="password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsCreateInstOpen(false)}
+              disabled={isCreatingInst}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCreateInstance}
+              disabled={isCreatingInst || !newInstName || !newInstToken}
+            >
+              {isCreatingInst ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editCampaign} onOpenChange={(open) => !open && setEditCampaign(null)}>
         <DialogContent className="sm:max-w-[425px]">
