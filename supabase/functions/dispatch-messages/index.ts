@@ -165,6 +165,21 @@ Deno.serve(async (req) => {
             options: { delay: delayMs },
           }
         } else {
+          if (!campaign.media_url || campaign.media_url.trim() === '') {
+            await supabase
+              .from('dispatch_queue')
+              .update({
+                status: 'ERROR',
+                error_message: JSON.stringify({
+                  error: 'URL de mídia ausente para campanha com mídia',
+                }),
+                phone: cleanPhone,
+              })
+              .eq('id', item.id)
+            totalProcessed++
+            continue
+          }
+
           evolutionEndpoint = `/message/sendMedia/${instance.name}`
           let mediaType = 'image'
 
@@ -188,7 +203,7 @@ Deno.serve(async (req) => {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              apikey: config.global_api_key || instance.token,
+              apikey: instance.token || config.global_api_key,
             },
             body: JSON.stringify(payload),
           })
