@@ -488,6 +488,7 @@ export const Constants = {
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
 //   CHECK profiles_role_check: CHECK ((role = ANY (ARRAY['master'::text, 'gerente'::text, 'corretor'::text])))
 // Table: whatsapp_instances
+//   UNIQUE whatsapp_instances_name_key: UNIQUE (name)
 //   FOREIGN KEY whatsapp_instances_owner_id_fkey: FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE
 //   PRIMARY KEY whatsapp_instances_pkey: PRIMARY KEY (id)
 
@@ -656,3 +657,7 @@ export const Constants = {
 //     SELECT role FROM public.profiles WHERE id = auth.uid();
 //   $function$
 //
+
+// --- INDEXES ---
+// Table: whatsapp_instances
+//   CREATE UNIQUE INDEX whatsapp_instances_name_key ON public.whatsapp_instances USING btree (name)

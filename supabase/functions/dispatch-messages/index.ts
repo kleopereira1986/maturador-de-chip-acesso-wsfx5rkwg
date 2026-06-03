@@ -64,9 +64,26 @@ Deno.serve(async (req) => {
         const instance = instances[instanceIndex % instances.length]
         instanceIndex++
 
-        const parseSpintax = (text: string) => {
+        // Filter instance to match campaign instance_ids (Round-Robin with selection)
+        let availableInstances = instances
+        if (campaign.instance_ids && campaign.instance_ids.length > 0) {
+          availableInstances = instances.filter((i: any) => campaign.instance_ids.includes(i.id))
+        }
+
+        if (availableInstances.length === 0) {
+          console.warn(`No matching connected instances for campaign ${campaign.name}`)
+          break // skip processing this campaign queue if no valid instance
+        }
+
+        const instance = availableInstances[instanceIndex % availableInstances.length]
+        instanceIndex++
+
+        const parseMessage = (text: string, leadName: string | null) => {
+          // Replace placeholders
+          let parsed = text.replace(/\{\{nome\}\}/gi, leadName || 'Amigo(a)')
+
+          // Spintax {A|B|C}
           const spintaxRegex = /\{([^{}]+)\}/g
-          let parsed = text
           let match
           while ((match = spintaxRegex.exec(parsed)) !== null) {
             const options = match[1].split('|')
@@ -77,9 +94,17 @@ Deno.serve(async (req) => {
           return parsed
         }
 
-        const messageText = parseSpintax(campaign.message_text)
+        const messageText = parseMessage(campaign.message_text, item.lead_name)
 
-        // Mock Evolution API interaction
+        // Simulated Wait Time - random delay based on campaign settings
+        const delayMs =
+          Math.floor(
+            Math.random() * ((campaign.max_delay || 30) - (campaign.min_delay || 10) + 1) +
+              (campaign.min_delay || 10),
+          ) * 1000
+        // console.log(`Waiting ${delayMs}ms before sending...`);
+
+        // Mock Evolution API interaction. In a real scenario you would call evolution webhook
         const success = true
 
         if (success) {
