@@ -9,6 +9,158 @@ export type Database = {
   }
   public: {
     Tables: {
+      campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          media_type: string
+          media_url: string | null
+          message_text: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_type?: string
+          media_url?: string | null
+          message_text: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          media_type?: string
+          media_url?: string | null
+          message_text?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'campaigns_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      dialer_queue: {
+        Row: {
+          created_at: string
+          id: string
+          lead_name: string | null
+          phone: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lead_name?: string | null
+          phone: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lead_name?: string | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      dispatch_queue: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          instance_id: string | null
+          lead_name: string | null
+          phone: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          lead_name?: string | null
+          phone: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          instance_id?: string | null
+          lead_name?: string | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'dispatch_queue_campaign_id_fkey'
+            columns: ['campaign_id']
+            isOneToOne: false
+            referencedRelation: 'campaigns'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'dispatch_queue_instance_id_fkey'
+            columns: ['instance_id']
+            isOneToOne: false
+            referencedRelation: 'whatsapp_instances'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      maturador_configs: {
+        Row: {
+          created_at: string
+          dialogue_tree: Json
+          id: string
+          is_active: boolean
+          max_delay: number
+          min_delay: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dialogue_tree?: Json
+          id?: string
+          is_active?: boolean
+          max_delay?: number
+          min_delay?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dialogue_tree?: Json
+          id?: string
+          is_active?: boolean
+          max_delay?: number
+          min_delay?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -35,6 +187,44 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      whatsapp_instances: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string | null
+          status: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id?: string | null
+          status?: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string | null
+          status?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_instances_owner_id_fkey'
+            columns: ['owner_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
     }
     Views: {
@@ -202,6 +392,41 @@ export const Constants = {
 // --- COLUMN TYPES (actual PostgreSQL types) ---
 // Use this to know the real database type when writing migrations.
 // "string" in TypeScript types above may be uuid, text, varchar, timestamptz, etc.
+// Table: campaigns
+//   id: uuid (not null, default: gen_random_uuid())
+//   name: text (not null)
+//   message_text: text (not null)
+//   media_url: text (nullable)
+//   media_type: text (not null, default: 'TEXT'::text)
+//   status: text (not null, default: 'WAITING'::text)
+//   created_by: uuid (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+// Table: dialer_queue
+//   id: uuid (not null, default: gen_random_uuid())
+//   lead_name: text (nullable)
+//   phone: text (not null)
+//   status: text (not null, default: 'PENDING'::text)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+// Table: dispatch_queue
+//   id: uuid (not null, default: gen_random_uuid())
+//   campaign_id: uuid (not null)
+//   instance_id: uuid (nullable)
+//   lead_name: text (nullable)
+//   phone: text (not null)
+//   status: text (not null, default: 'PENDING'::text)
+//   error_message: text (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+// Table: maturador_configs
+//   id: uuid (not null, default: gen_random_uuid())
+//   dialogue_tree: jsonb (not null, default: '{}'::jsonb)
+//   is_active: boolean (not null, default: false)
+//   min_delay: integer (not null, default: 40)
+//   max_delay: integer (not null, default: 90)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
 // Table: profiles
 //   id: uuid (not null)
 //   email: text (not null)
@@ -209,14 +434,52 @@ export const Constants = {
 //   role: text (not null)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+// Table: whatsapp_instances
+//   id: uuid (not null, default: gen_random_uuid())
+//   name: text (not null)
+//   token: text (not null)
+//   status: text (not null, default: 'DISCONNECTED'::text)
+//   owner_id: uuid (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
 
 // --- CONSTRAINTS ---
+// Table: campaigns
+//   FOREIGN KEY campaigns_created_by_fkey: FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE CASCADE
+//   PRIMARY KEY campaigns_pkey: PRIMARY KEY (id)
+// Table: dialer_queue
+//   PRIMARY KEY dialer_queue_pkey: PRIMARY KEY (id)
+// Table: dispatch_queue
+//   FOREIGN KEY dispatch_queue_campaign_id_fkey: FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+//   FOREIGN KEY dispatch_queue_instance_id_fkey: FOREIGN KEY (instance_id) REFERENCES whatsapp_instances(id) ON DELETE SET NULL
+//   PRIMARY KEY dispatch_queue_pkey: PRIMARY KEY (id)
+// Table: maturador_configs
+//   PRIMARY KEY maturador_configs_pkey: PRIMARY KEY (id)
 // Table: profiles
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
 //   CHECK profiles_role_check: CHECK ((role = ANY (ARRAY['master'::text, 'gerente'::text, 'corretor'::text])))
+// Table: whatsapp_instances
+//   FOREIGN KEY whatsapp_instances_owner_id_fkey: FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE
+//   PRIMARY KEY whatsapp_instances_pkey: PRIMARY KEY (id)
 
 // --- ROW LEVEL SECURITY POLICIES ---
+// Table: campaigns
+//   Policy "Campaigns Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+// Table: dialer_queue
+//   Policy "DialerQueue All Corretor read, Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: true
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+// Table: dispatch_queue
+//   Policy "DispatchQueue Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+// Table: maturador_configs
+//   Policy "Maturador Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: profiles
 //   Policy "Corretor can read self" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: (id = auth.uid())
@@ -228,6 +491,10 @@ export const Constants = {
 //   Policy "Master can do all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = 'master'::text)
 //     WITH CHECK: (get_my_role() = 'master'::text)
+// Table: whatsapp_instances
+//   Policy "Instances Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 
 // --- DATABASE FUNCTIONS ---
 // FUNCTION admin_create_user(text, text, text, text)

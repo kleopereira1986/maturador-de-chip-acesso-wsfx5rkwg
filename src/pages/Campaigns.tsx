@@ -109,7 +109,7 @@ export default function Campaigns() {
   }
 
   const toggleStatus = async (c: Campaign) => {
-    const newStatus = c.status === 'SENDING' ? 'PAUSED' : 'SENDING'
+    const newStatus = c.status === 'DISPARANDO' ? 'PAUSADO' : 'DISPARANDO'
     await campaignsService.updateCampaign(c.id, { status: newStatus })
     fetchCampaigns()
   }
@@ -156,7 +156,7 @@ export default function Campaigns() {
                     </div>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => toggleStatus(c)}>
-                        {c.status === 'SENDING' ? (
+                        {c.status === 'DISPARANDO' ? (
                           <>
                             <Pause className="mr-1 h-4 w-4" /> Pausar
                           </>
@@ -186,7 +186,7 @@ export default function Campaigns() {
                   </div>
                   <Progress value={progress} className="h-2" />
                   <div className="mt-4 flex gap-2">
-                    <Badge variant={c.status === 'SENDING' ? 'default' : 'outline'}>
+                    <Badge variant={c.status === 'DISPARANDO' ? 'default' : 'outline'}>
                       {c.status}
                     </Badge>
                     <Badge variant="outline">{c.media_type}</Badge>

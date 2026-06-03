@@ -14,16 +14,48 @@ export default function Dialer() {
   // WebRTC Simulator (mocking Asterisk Bridge)
   useEffect(() => {
     let interval: any
+    let ws: WebSocket | null = null
+
     if (isReady && !activeCall) {
-      // Simulate incoming bridged call
+      try {
+        // Attempt to connect to a configurable Asterisk WSS endpoint
+        const wssUrl = import.meta.env.VITE_ASTERISK_WSS_URL || 'wss://localhost:8089/ws'
+        ws = new WebSocket(wssUrl)
+
+        ws.onopen = () => {
+          console.log('Connected to Asterisk WebRTC (WSS)')
+        }
+        ws.onmessage = (event) => {
+          const data = JSON.parse(event.data)
+          if (data.event === 'incoming_call') {
+            setActiveCall({
+              leadName: data.leadName || 'Cliente Desconhecido',
+              phone: data.phone || '0000000000',
+              status: 'CONECTADO',
+            })
+          }
+        }
+        ws.onerror = () => {
+          console.warn('Asterisk WSS Connection Failed, falling back to mock simulator.')
+        }
+      } catch (e) {
+        console.warn('Invalid WSS URL', e)
+      }
+
+      // Simulate incoming bridged call fallback if WSS doesn't provide one
       const timer = setTimeout(() => {
-        setActiveCall({
-          leadName: 'João da Silva',
-          phone: '+55 11 99999-9999',
-          status: 'CONNECTED',
-        })
+        if (!activeCall) {
+          setActiveCall({
+            leadName: 'João da Silva',
+            phone: '+55 11 99999-9999',
+            status: 'CONECTADO',
+          })
+        }
       }, 5000)
-      return () => clearTimeout(timer)
+      return () => {
+        clearTimeout(timer)
+        if (ws) ws.close()
+      }
     }
 
     if (activeCall) {

@@ -17,7 +17,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey)
 
   try {
-    const { data: campaigns } = await supabase.from('campaigns').select('*').eq('status', 'SENDING')
+    const { data: campaigns } = await supabase
+      .from('campaigns')
+      .select('*')
+      .eq('status', 'DISPARANDO')
 
     if (!campaigns || campaigns.length === 0) {
       return new Response(JSON.stringify({ message: 'No active campaigns' }), {
@@ -28,7 +31,7 @@ Deno.serve(async (req) => {
     const { data: instances } = await supabase
       .from('whatsapp_instances')
       .select('*')
-      .eq('status', 'CONNECTED')
+      .eq('status', 'CONECTADO')
     if (!instances || instances.length === 0) {
       return new Response(JSON.stringify({ message: 'No connected instances' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -43,7 +46,7 @@ Deno.serve(async (req) => {
         .select('status')
         .eq('id', campaign.id)
         .single()
-      if (checkCamp?.status === 'PAUSED') continue
+      if (checkCamp?.status === 'PAUSADO') continue
 
       const { data: queue } = await supabase
         .from('dispatch_queue')
@@ -53,7 +56,7 @@ Deno.serve(async (req) => {
         .limit(50)
 
       if (!queue || queue.length === 0) {
-        await supabase.from('campaigns').update({ status: 'COMPLETED' }).eq('id', campaign.id)
+        await supabase.from('campaigns').update({ status: 'CONCLUIDO' }).eq('id', campaign.id)
         continue
       }
 

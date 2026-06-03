@@ -13,7 +13,7 @@ export type WhatsappInstance = {
   id: string
   name: string
   token: string
-  status: 'CONNECTED' | 'DISCONNECTED' | 'PAUSED'
+  status: 'CONECTADO' | 'DESCONECTADO' | 'PAUSADO'
   owner_id: string
   created_at: string
   updated_at: string
@@ -25,7 +25,7 @@ export type Campaign = {
   message_text: string
   media_url: string | null
   media_type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO'
-  status: 'WAITING' | 'SENDING' | 'PAUSED' | 'COMPLETED'
+  status: 'AGUARDANDO' | 'DISPARANDO' | 'PAUSADO' | 'CONCLUIDO'
   created_by: string
   created_at: string
   updated_at: string

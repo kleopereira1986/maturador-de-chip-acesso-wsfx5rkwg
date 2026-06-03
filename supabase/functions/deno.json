@@ -1,5 +1,6 @@
 {
   "_versions": {
-    "dispatch-messages": 1
+    "dispatch-messages": 2,
+    "evolution-webhook": 1
   }
 }
