@@ -27,6 +27,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Play, Pause, Plus, Trash2, Loader2, Edit, UploadCloud } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { supabase } from '@/lib/supabase/client'
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])

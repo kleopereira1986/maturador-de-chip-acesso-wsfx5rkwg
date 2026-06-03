@@ -284,6 +284,26 @@ export type Database = {
         Returns: undefined
       }
       get_my_role: { Args: never; Returns: string }
+      lock_and_get_queue: {
+        Args: { p_campaign_id: string; p_limit: number }
+        Returns: {
+          campaign_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          instance_id: string | null
+          lead_name: string | null
+          phone: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: '*'
+          to: 'dispatch_queue'
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       [_ in never]: never
@@ -673,6 +693,53 @@ export const Constants = {
 //     SELECT role FROM public.profiles WHERE id = auth.uid();
 //   $function$
 //
+// FUNCTION lock_and_get_queue(uuid, integer)
+//   CREATE OR REPLACE FUNCTION public.lock_and_get_queue(p_campaign_id uuid, p_limit integer)
+//    RETURNS SETOF dispatch_queue
+//    LANGUAGE plpgsql
+//   AS $function$
+//   BEGIN
+//     RETURN QUERY
+//     UPDATE public.dispatch_queue
+//     SET status = 'PROCESSING'
+//     WHERE id IN (
+//       SELECT id
+//       FROM public.dispatch_queue
+//       WHERE campaign_id = p_campaign_id
+//         AND status = 'PENDING'
+//       LIMIT p_limit
+//       FOR UPDATE SKIP LOCKED
+//     )
+//     RETURNING *;
+//   END;
+//   $function$
+//
+// FUNCTION trigger_dispatch_messages()
+//   CREATE OR REPLACE FUNCTION public.trigger_dispatch_messages()
+//    RETURNS trigger
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   BEGIN
+//     IF NEW.status = 'DISPARANDO' AND (OLD.status IS NULL OR OLD.status != 'DISPARANDO') THEN
+//       BEGIN
+//         PERFORM net.http_post(
+//           url := 'https://uidafexgwtplfnjrgoyi.supabase.co/functions/v1/dispatch-messages',
+//           headers := '{"Content-Type": "application/json"}'::jsonb,
+//           body := jsonb_build_object('campaign_id', NEW.id)
+//         );
+//       EXCEPTION WHEN OTHERS THEN
+//         RAISE NOTICE 'Failed to invoke edge function: %', SQLERRM;
+//       END;
+//     END IF;
+//     RETURN NEW;
+//   END;
+//   $function$
+//
+
+// --- TRIGGERS ---
+// Table: campaigns
+//   on_campaign_start_dispatch: CREATE TRIGGER on_campaign_start_dispatch AFTER UPDATE OF status ON public.campaigns FOR EACH ROW EXECUTE FUNCTION trigger_dispatch_messages()
 
 // --- INDEXES ---
 // Table: whatsapp_instances
