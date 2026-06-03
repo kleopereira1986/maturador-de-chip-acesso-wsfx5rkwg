@@ -17,6 +17,18 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey)
 
   try {
+    const { data: config } = await supabase
+      .from('configuracoes_api')
+      .select('*')
+      .limit(1)
+      .maybeSingle()
+    if (!config || !config.url_servidor || !config.global_api_key) {
+      console.warn('API config not found')
+      return new Response(JSON.stringify({ message: 'API config not found' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     const { data: campaigns } = await supabase
       .from('campaigns')
       .select('*')
@@ -38,7 +50,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    let instanceIndex = 0
+    let totalProcessed = 0
+    let hasMore = false
 
     for (const campaign of campaigns) {
       const { data: checkCamp } = await supabase
@@ -46,43 +59,51 @@ Deno.serve(async (req) => {
         .select('status')
         .eq('id', campaign.id)
         .single()
-      if (checkCamp?.status === 'PAUSADO') continue
+      if (checkCamp?.status !== 'DISPARANDO') continue
 
-      const { data: queue } = await supabase
-        .from('dispatch_queue')
-        .select('*')
-        .eq('campaign_id', campaign.id)
-        .eq('status', 'PENDING')
-        .limit(50)
+      let availableInstances = instances
+      if (campaign.instance_ids && campaign.instance_ids.length > 0) {
+        availableInstances = instances.filter((i: any) => campaign.instance_ids.includes(i.id))
+      }
 
-      if (!queue || queue.length === 0) {
-        await supabase.from('campaigns').update({ status: 'CONCLUIDO' }).eq('id', campaign.id)
+      if (availableInstances.length === 0) {
+        console.warn(`No matching connected instances for campaign ${campaign.name}`)
         continue
       }
 
-      for (const item of queue) {
-        const instance = instances[instanceIndex % instances.length]
-        instanceIndex++
+      // Atomically fetch and lock up to 20 queue items to prevent race conditions
+      const { data: queue, error: lockError } = await supabase.rpc('lock_and_get_queue', {
+        p_campaign_id: campaign.id,
+        p_limit: 20,
+      })
 
-        // Filter instance to match campaign instance_ids (Round-Robin with selection)
-        let availableInstances = instances
-        if (campaign.instance_ids && campaign.instance_ids.length > 0) {
-          availableInstances = instances.filter((i: any) => campaign.instance_ids.includes(i.id))
+      if (lockError) {
+        console.error('Queue lock error:', lockError)
+        continue
+      }
+
+      if (!queue || queue.length === 0) {
+        const { count } = await supabase
+          .from('dispatch_queue')
+          .select('id', { count: 'exact', head: true })
+          .eq('campaign_id', campaign.id)
+          .in('status', ['PENDING', 'PROCESSING'])
+        if (count === 0) {
+          await supabase.from('campaigns').update({ status: 'CONCLUIDO' }).eq('id', campaign.id)
         }
+        continue
+      }
 
-        if (availableInstances.length === 0) {
-          console.warn(`No matching connected instances for campaign ${campaign.name}`)
-          break // skip processing this campaign queue if no valid instance
-        }
+      if (queue.length === 20) {
+        hasMore = true
+      }
 
-        const instance = availableInstances[instanceIndex % availableInstances.length]
-        instanceIndex++
+      for (let i = 0; i < queue.length; i++) {
+        const item = queue[i]
+        const instance = availableInstances[i % availableInstances.length]
 
         const parseMessage = (text: string, leadName: string | null) => {
-          // Replace placeholders
           let parsed = text.replace(/\{\{nome\}\}/gi, leadName || 'Amigo(a)')
-
-          // Spintax {A|B|C}
           const spintaxRegex = /\{([^{}]+)\}/g
           let match
           while ((match = spintaxRegex.exec(parsed)) !== null) {
@@ -96,35 +117,89 @@ Deno.serve(async (req) => {
 
         const messageText = parseMessage(campaign.message_text, item.lead_name)
 
-        // Simulated Wait Time - random delay based on campaign settings
+        let evolutionEndpoint = ''
+        let payload: any = {}
         const delayMs =
           Math.floor(
             Math.random() * ((campaign.max_delay || 30) - (campaign.min_delay || 10) + 1) +
               (campaign.min_delay || 10),
           ) * 1000
-        // console.log(`Waiting ${delayMs}ms before sending...`);
 
-        // Mock Evolution API interaction. In a real scenario you would call evolution webhook
-        const success = true
-
-        if (success) {
-          await supabase
-            .from('dispatch_queue')
-            .update({ status: 'SENT', instance_id: instance.id })
-            .eq('id', item.id)
+        if (campaign.media_type === 'TEXT') {
+          evolutionEndpoint = `/message/sendText/${instance.name}`
+          payload = {
+            number: item.phone,
+            text: messageText,
+            delay: delayMs,
+          }
         } else {
+          evolutionEndpoint = `/message/sendMedia/${instance.name}`
+          let mediatype = 'image'
+          if (campaign.media_type === 'VIDEO') mediatype = 'video'
+          if (campaign.media_type === 'AUDIO') mediatype = 'audio'
+
+          payload = {
+            number: item.phone,
+            mediatype: mediatype,
+            mimetype:
+              campaign.media_type === 'VIDEO'
+                ? 'video/mp4'
+                : campaign.media_type === 'AUDIO'
+                  ? 'audio/mpeg'
+                  : 'image/jpeg',
+            media: campaign.media_url,
+            caption: messageText,
+            delay: delayMs,
+          }
+        }
+
+        try {
+          const res = await fetch(`${config.url_servidor}${evolutionEndpoint}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: config.global_api_key,
+            },
+            body: JSON.stringify(payload),
+          })
+
+          if (res.status === 200 || res.status === 201) {
+            await supabase
+              .from('dispatch_queue')
+              .update({ status: 'SENT', instance_id: instance.id })
+              .eq('id', item.id)
+          } else {
+            const errorData = await res.text()
+            await supabase
+              .from('dispatch_queue')
+              .update({ status: 'ERROR', error_message: `API Error ${res.status}: ${errorData}` })
+              .eq('id', item.id)
+            console.error(`Evolution API Error for ${item.phone}:`, errorData)
+          }
+        } catch (err: any) {
           await supabase
             .from('dispatch_queue')
-            .update({ status: 'FAILED', error_message: 'API Error' })
+            .update({ status: 'ERROR', error_message: `Fetch Error: ${err.message}` })
             .eq('id', item.id)
+          console.error(`Fetch Error for ${item.phone}:`, err)
         }
+        totalProcessed++
       }
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    if (hasMore) {
+      // Trigger next batch asynchronously to continue processing large queues
+      fetch(`${supabaseUrl}/functions/v1/dispatch-messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).catch(console.error)
+    }
+
+    return new Response(JSON.stringify({ success: true, processed: totalProcessed }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error: any) {
+    console.error('Dispatch worker error:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

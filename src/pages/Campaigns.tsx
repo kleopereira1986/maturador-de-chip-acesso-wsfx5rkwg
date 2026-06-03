@@ -78,6 +78,39 @@ export default function Campaigns() {
 
   useEffect(() => {
     fetchData()
+
+    // Poll stats every 5 seconds if there are active campaigns
+    const interval = setInterval(() => {
+      setCampaigns((currentCampaigns) => {
+        const activeCamps = currentCampaigns.filter((c) => c.status === 'DISPARANDO')
+        if (activeCamps.length > 0) {
+          activeCamps.forEach((c) => {
+            campaignsService.getDispatchStats(c.id).then((st) => {
+              setStats((prev) => ({ ...prev, [c.id]: st }))
+            })
+          })
+        }
+        return currentCampaigns
+      })
+    }, 5000)
+
+    const sub = supabase
+      .channel('campaigns-changes')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns' },
+        (payload) => {
+          setCampaigns((prev) =>
+            prev.map((c) => (c.id === payload.new.id ? { ...c, ...payload.new } : c)),
+          )
+        },
+      )
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(sub)
+    }
   }, [])
 
   const parseCSV = async (file: File): Promise<{ lead_name: string | null; phone: string }[]> => {
@@ -291,7 +324,9 @@ export default function Campaigns() {
                       </div>
                       <Progress value={progress} className="h-2" />
                       <div className="flex justify-between mt-1 text-[10px] text-slate-500">
-                        <span>Pendentes: {s.pending}</span>
+                        <span>
+                          Pendentes: {s.pending} | Processando: {s.processing || 0}
+                        </span>
                         <span className="text-red-500">Falhas: {s.failed}</span>
                       </div>
                     </div>

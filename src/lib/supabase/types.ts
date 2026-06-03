@@ -14,9 +14,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          instance_ids: string[]
+          max_delay: number
           media_type: string
           media_url: string | null
           message_text: string
+          min_delay: number
           name: string
           status: string
           updated_at: string
@@ -25,9 +28,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          instance_ids?: string[]
+          max_delay?: number
           media_type?: string
           media_url?: string | null
           message_text: string
+          min_delay?: number
           name: string
           status?: string
           updated_at?: string
@@ -36,9 +42,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          instance_ids?: string[]
+          max_delay?: number
           media_type?: string
           media_url?: string | null
           message_text?: string
+          min_delay?: number
           name?: string
           status?: string
           updated_at?: string
@@ -213,6 +222,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          is_maturador_active: boolean
           name: string
           owner_id: string | null
           status: string
@@ -222,6 +232,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          is_maturador_active?: boolean
           name: string
           owner_id?: string | null
           status?: string
@@ -231,6 +242,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          is_maturador_active?: boolean
           name?: string
           owner_id?: string | null
           status?: string
@@ -423,6 +435,9 @@ export const Constants = {
 //   created_by: uuid (nullable)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+//   min_delay: integer (not null, default: 10)
+//   max_delay: integer (not null, default: 30)
+//   instance_ids: _uuid (not null, default: '{}'::uuid[])
 // Table: configuracoes_api
 //   id: uuid (not null, default: gen_random_uuid())
 //   url_servidor: character varying (not null, default: 'https://api.primaziainvestimentos.com'::character varying)
@@ -468,6 +483,7 @@ export const Constants = {
 //   owner_id: uuid (nullable)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
+//   is_maturador_active: boolean (not null, default: false)
 
 // --- CONSTRAINTS ---
 // Table: campaigns

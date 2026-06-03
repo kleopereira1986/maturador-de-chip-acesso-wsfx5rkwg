@@ -46,14 +46,16 @@ export const campaignsService = {
     let sent = 0
     let failed = 0
     let pending = 0
+    let processing = 0
 
     data.forEach((q) => {
       if (q.status === 'SENT') sent++
-      else if (q.status === 'FAILED') failed++
+      else if (q.status === 'FAILED' || q.status === 'ERROR') failed++
+      else if (q.status === 'PROCESSING') processing++
       else pending++
     })
 
-    return { sent, failed, pending, total: sent + failed + pending }
+    return { sent, failed, pending, processing, total: sent + failed + pending + processing }
   },
   async addLeads(campaignId: string, leads: { lead_name: string | null; phone: string }[]) {
     const payload = leads.map((l) => ({

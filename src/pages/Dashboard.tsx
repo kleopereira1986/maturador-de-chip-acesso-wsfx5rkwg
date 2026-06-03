@@ -78,7 +78,7 @@ export default function Dashboard() {
 
     if (profile?.role === 'master' || profile?.role === 'gerente') {
       const sub = supabase
-        .channel('dashboard-instances')
+        .channel('dashboard-changes')
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'whatsapp_instances' },
@@ -97,6 +97,17 @@ export default function Dashboard() {
               }
               return prev
             })
+          },
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'campaigns' },
+          (payload) => {
+            setCampaigns((prev) =>
+              prev.map((c) =>
+                c.id === payload.new.id ? ({ ...c, ...payload.new } as Campaign) : c,
+              ),
+            )
           },
         )
         .subscribe()
