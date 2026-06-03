@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
-import { Phone, PhoneOff, User, Mic, AlertCircle, PhoneCall } from 'lucide-react'
+import { Phone, PhoneOff, User, Mic, AlertCircle, PhoneCall, PhoneIncoming } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useToast } from '@/hooks/use-toast'
+import { UserAgent, Registerer, Inviter, SessionState, RegistererState, Invitation } from 'sip.js'
 
 export default function Dialer() {
   const { profile } = useAuth()
@@ -18,84 +19,163 @@ export default function Dialer() {
   const [registrationStatus, setRegistrationStatus] = useState<
     'Disconnected' | 'Connecting' | 'Registered' | 'Error'
   >('Disconnected')
-  const wsRef = useRef<WebSocket | null>(null)
 
-  useEffect(() => {
-    if (isReady && !activeCall && profile?.sip_extension && profile?.sip_password) {
-      setRegistrationStatus('Connecting')
+  const [userAgent, setUserAgent] = useState<UserAgent | null>(null)
+  const [registerer, setRegisterer] = useState<Registerer | null>(null)
+  const [session, setSession] = useState<Inviter | Invitation | null>(null)
 
-      try {
-        const wssUrl = import.meta.env.VITE_RTC_WSS_URL || 'wss://rtc.imobixcrm.com:8089'
-        const ws = new WebSocket(wssUrl)
-        wsRef.current = ws
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-        ws.onopen = () => {
-          console.log('Connected to Asterisk WebRTC (WSS)')
-          ws.send(
-            JSON.stringify({
-              action: 'register',
-              extension: profile.sip_extension,
-              password: profile.sip_password,
-              domain: profile.sip_domain,
-            }),
-          )
-          setRegistrationStatus('Registered')
-        }
+  const setupRemoteMedia = (currentSession: Inviter | Invitation) => {
+    currentSession.stateChange.addListener((state) => {
+      console.log(`[SIP.js] Session state changed to ${state}`)
 
-        ws.onmessage = (event) => {
-          const data = JSON.parse(event.data)
-          if (data.event === 'incoming_call') {
-            setActiveCall({
-              leadName: data.leadName || 'Cliente Desconhecido',
-              phone: data.phone || 'Desconhecido',
-              status: 'CONECTADO',
-            })
+      if (state === SessionState.Established) {
+        console.log('[SIP.js] Call accepted/established')
+        setActiveCall((prev: any) => (prev ? { ...prev, status: 'CONECTADO' } : prev))
+        const sessionDescriptionHandler = currentSession.sessionDescriptionHandler as any
+        if (!sessionDescriptionHandler) return
+
+        const pc = sessionDescriptionHandler.peerConnection
+        if (pc) {
+          const remoteStream = new MediaStream()
+          pc.getReceivers().forEach((receiver: any) => {
+            if (receiver.track) {
+              remoteStream.addTrack(receiver.track)
+            }
+          })
+          if (audioRef.current) {
+            audioRef.current.srcObject = remoteStream
+            audioRef.current.play().catch((e) => console.error('Audio play error:', e))
           }
         }
+      } else if (state === SessionState.Terminated || state === SessionState.Rejected) {
+        console.log('[SIP.js] Call bye/terminated')
+        setActiveCall(null)
+        setSession(null)
+      }
+    })
+  }
 
-        ws.onerror = (e) => {
-          console.error('Asterisk WSS Connection Failed.', e)
-          setRegistrationStatus('Error')
-          setIsReady(false)
-          toast({
-            title: 'Erro de Conexão SIP',
-            description: 'Falha ao conectar ao servidor WebRTC. Verifique SSL ou credenciais.',
-            variant: 'destructive',
+  useEffect(() => {
+    if (isReady && profile?.sip_extension && profile?.sip_password) {
+      if (userAgent) return
+
+      setRegistrationStatus('Connecting')
+
+      const domain = profile.sip_domain || window.location.hostname
+      const uri = UserAgent.makeURI(`sip:${profile.sip_extension}@${domain}`)
+
+      if (!uri) {
+        setRegistrationStatus('Error')
+        toast({ title: 'Erro', description: 'URI SIP inválida.', variant: 'destructive' })
+        setIsReady(false)
+        return
+      }
+
+      const wssUrl = import.meta.env.VITE_RTC_WSS_URL || 'wss://rtc.imobixcrm.com:8089/ws'
+
+      try {
+        const ua = new UserAgent({
+          uri,
+          transportOptions: {
+            server: wssUrl,
+          },
+          authorizationUsername: profile.sip_extension,
+          authorizationPassword: profile.sip_password,
+          delegate: {
+            onInvite: (invitation: Invitation) => {
+              console.log('[SIP.js] Incoming call received (invite)')
+              setSession(invitation)
+              setActiveCall({
+                leadName: 'Chamada Recebida',
+                phone: invitation.remoteIdentity.uri.user || 'Desconhecido',
+                status: 'RECEBENDO',
+              })
+              setupRemoteMedia(invitation)
+            },
+          },
+        })
+
+        const reg = new Registerer(ua)
+
+        reg.stateChange.addListener((state) => {
+          if (state === RegistererState.Registered) {
+            console.log('[SIP.js] SIP Registered (registered)')
+            setRegistrationStatus('Registered')
+          } else if (state === RegistererState.Unregistered) {
+            console.log('[SIP.js] SIP Unregistered (unregistered)')
+            setRegistrationStatus('Disconnected')
+          } else if (state === RegistererState.Terminated) {
+            console.log('[SIP.js] SIP Terminated')
+            setRegistrationStatus('Disconnected')
+          }
+        })
+
+        ua.start()
+          .then(() => {
+            reg
+              .register()
+              .then(() => {
+                console.log('[SIP.js] Registration successful')
+              })
+              .catch((e) => {
+                console.error('[SIP.js] Registration failed (registrationFailed)', e)
+                setRegistrationStatus('Error')
+                toast({
+                  title: 'Erro de Registro SIP',
+                  description: 'Falha ao registrar com as credenciais fornecidas.',
+                  variant: 'destructive',
+                })
+                setIsReady(false)
+              })
           })
-        }
+          .catch((e) => {
+            console.error('[SIP.js] UA Start failed', e)
+            setRegistrationStatus('Error')
+            toast({
+              title: 'Erro de Conexão SIP',
+              description: 'Falha ao conectar ao servidor WebRTC. Verifique a URL WSS.',
+              variant: 'destructive',
+            })
+            setIsReady(false)
+          })
 
-        ws.onclose = () => {
-          setRegistrationStatus('Disconnected')
-          wsRef.current = null
-        }
-      } catch (e) {
-        console.error('Invalid WSS URL', e)
+        setUserAgent(ua)
+        setRegisterer(reg)
+      } catch (err) {
+        console.error('[SIP.js] Setup error:', err)
         setRegistrationStatus('Error')
         setIsReady(false)
-        toast({
-          title: 'Erro de URL',
-          description: 'A URL do servidor WSS é inválida.',
-          variant: 'destructive',
-        })
       }
-    } else if (!isReady) {
-      if (wsRef.current) {
-        wsRef.current.close()
-        wsRef.current = null
+    } else if (!isReady && userAgent) {
+      if (registerer) {
+        registerer.unregister().finally(() => {
+          userAgent.stop().finally(() => {
+            setUserAgent(null)
+            setRegisterer(null)
+          })
+        })
+      } else {
+        userAgent.stop().finally(() => {
+          setUserAgent(null)
+        })
       }
       setRegistrationStatus('Disconnected')
     }
+  }, [isReady, profile, toast, userAgent, registerer])
 
+  useEffect(() => {
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
+      if (userAgent) {
+        userAgent.stop()
       }
     }
-  }, [isReady, profile, toast, activeCall])
+  }, [userAgent])
 
   useEffect(() => {
     let interval: any
-    if (activeCall) {
+    if (activeCall && activeCall.status === 'CONECTADO') {
       interval = setInterval(() => {
         setCallDuration((prev) => prev + 1)
       }, 1000)
@@ -113,32 +193,72 @@ export default function Dialer() {
     return `${m}:${s}`
   }
 
-  const initiateCall = () => {
-    if (!targetNumber) return
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          action: 'call',
-          number: targetNumber,
-        }),
-      )
+  const initiateCall = async () => {
+    if (!targetNumber || !userAgent) return
+
+    try {
+      const domain = profile?.sip_domain || window.location.hostname
+      const targetURI = UserAgent.makeURI(`sip:${targetNumber}@${domain}`)
+      if (!targetURI) throw new Error('Número de destino inválido')
+
+      const inviter = new Inviter(userAgent, targetURI, {
+        sessionDescriptionHandlerOptions: {
+          constraints: { audio: true, video: false },
+        },
+      })
+
+      setupRemoteMedia(inviter)
+
+      await inviter.invite()
+      setSession(inviter)
+
+      setActiveCall({
+        leadName: 'Chamada Saínte',
+        phone: targetNumber,
+        status: 'CONECTANDO',
+      })
+    } catch (e: any) {
+      console.error('[SIP.js] Call initiation failed:', e)
+      toast({
+        title: 'Erro ao chamar',
+        description: e.message || 'Falha ao iniciar chamada',
+        variant: 'destructive',
+      })
     }
-    setActiveCall({
-      leadName: 'Chamada Saínte',
-      phone: targetNumber,
-      status: 'CONECTADO',
-    })
+  }
+
+  const acceptCall = async () => {
+    if (session && session instanceof Invitation) {
+      try {
+        await session.accept({
+          sessionDescriptionHandlerOptions: {
+            constraints: { audio: true, video: false },
+          },
+        })
+      } catch (e: any) {
+        console.error('[SIP.js] Error accepting call:', e)
+        toast({ title: 'Erro', description: 'Falha ao atender chamada.', variant: 'destructive' })
+      }
+    }
   }
 
   const endCall = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          action: 'hangup',
-        }),
-      )
+    if (session) {
+      if (session.state === SessionState.Established) {
+        session.bye()
+      } else if (
+        session.state === SessionState.Initial ||
+        session.state === SessionState.Establishing
+      ) {
+        if (session instanceof Inviter) {
+          session.cancel()
+        } else if (session instanceof Invitation) {
+          session.reject()
+        }
+      }
     }
     setActiveCall(null)
+    setSession(null)
   }
 
   return (
@@ -249,7 +369,7 @@ export default function Dialer() {
             ) : (
               <div className="text-center w-full space-y-6">
                 <div className="bg-primary/10 text-primary px-4 py-2 rounded-full inline-block font-mono font-bold text-xl mb-4 animate-pulse">
-                  {formatTime(callDuration)}
+                  {activeCall.status === 'CONECTADO' ? formatTime(callDuration) : activeCall.status}
                 </div>
 
                 <div className="space-y-2">
@@ -258,6 +378,16 @@ export default function Dialer() {
                 </div>
 
                 <div className="flex justify-center gap-4 mt-8">
+                  {activeCall.status === 'RECEBENDO' && (
+                    <Button
+                      variant="default"
+                      size="lg"
+                      className="rounded-full h-16 w-16 p-0 shadow-lg bg-green-500 hover:bg-green-600"
+                      onClick={acceptCall}
+                    >
+                      <PhoneIncoming className="h-6 w-6" />
+                    </Button>
+                  )}
                   <Button
                     variant="destructive"
                     size="lg"
@@ -270,6 +400,7 @@ export default function Dialer() {
               </div>
             )}
           </CardContent>
+          <audio ref={audioRef} autoPlay />
         </Card>
 
         <Card>
