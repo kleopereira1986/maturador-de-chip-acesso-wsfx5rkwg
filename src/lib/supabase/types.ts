@@ -268,6 +268,47 @@ export type Database = {
           },
         ]
       }
+      whatsapp_messages: {
+        Row: {
+          contact_name: string | null
+          contact_phone: string
+          created_at: string
+          direction: string
+          id: string
+          instance_id: string
+          is_responded: boolean
+          message_body: string
+        }
+        Insert: {
+          contact_name?: string | null
+          contact_phone: string
+          created_at?: string
+          direction: string
+          id?: string
+          instance_id: string
+          is_responded?: boolean
+          message_body: string
+        }
+        Update: {
+          contact_name?: string | null
+          contact_phone?: string
+          created_at?: string
+          direction?: string
+          id?: string
+          instance_id?: string
+          is_responded?: boolean
+          message_body?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'whatsapp_messages_instance_id_fkey'
+            columns: ['instance_id']
+            isOneToOne: false
+            referencedRelation: 'whatsapp_instances'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -516,6 +557,15 @@ export const Constants = {
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
 //   is_maturador_active: boolean (not null, default: false)
+// Table: whatsapp_messages
+//   id: uuid (not null, default: gen_random_uuid())
+//   instance_id: uuid (not null)
+//   contact_phone: text (not null)
+//   contact_name: text (nullable)
+//   message_body: text (not null)
+//   direction: text (not null)
+//   is_responded: boolean (not null, default: false)
+//   created_at: timestamp with time zone (not null, default: now())
 
 // --- CONSTRAINTS ---
 // Table: campaigns
@@ -539,6 +589,10 @@ export const Constants = {
 //   UNIQUE whatsapp_instances_name_key: UNIQUE (name)
 //   FOREIGN KEY whatsapp_instances_owner_id_fkey: FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE
 //   PRIMARY KEY whatsapp_instances_pkey: PRIMARY KEY (id)
+// Table: whatsapp_messages
+//   CHECK whatsapp_messages_direction_check: CHECK ((direction = ANY (ARRAY['incoming'::text, 'outgoing'::text])))
+//   FOREIGN KEY whatsapp_messages_instance_id_fkey: FOREIGN KEY (instance_id) REFERENCES whatsapp_instances(id) ON DELETE CASCADE
+//   PRIMARY KEY whatsapp_messages_pkey: PRIMARY KEY (id)
 
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: campaigns
@@ -597,6 +651,17 @@ export const Constants = {
 //     USING: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
 //     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))
 //   Policy "Instances Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+// Table: whatsapp_messages
+//   Policy "Messages Corretor insert" (INSERT, PERMISSIVE) roles={authenticated}
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//   Policy "Messages Corretor select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//   Policy "Messages Corretor update" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//   Policy "Messages Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 
@@ -778,3 +843,7 @@ export const Constants = {
 // --- INDEXES ---
 // Table: whatsapp_instances
 //   CREATE UNIQUE INDEX whatsapp_instances_name_key ON public.whatsapp_instances USING btree (name)
+// Table: whatsapp_messages
+//   CREATE INDEX idx_whatsapp_messages_contact_phone ON public.whatsapp_messages USING btree (contact_phone)
+//   CREATE INDEX idx_whatsapp_messages_instance_id ON public.whatsapp_messages USING btree (instance_id)
+//   CREATE INDEX idx_whatsapp_messages_is_responded ON public.whatsapp_messages USING btree (is_responded)

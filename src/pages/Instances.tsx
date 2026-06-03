@@ -4,7 +4,7 @@ import { WhatsappInstance } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Smartphone, Loader2, QrCode, Settings } from 'lucide-react'
+import { Plus, Trash2, Smartphone, Loader2, QrCode, Settings, Webhook } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ export default function Instances() {
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
   const [globalApiKey, setGlobalApiKey] = useState('')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isConfiguringWebhooks, setIsConfiguringWebhooks] = useState(false)
 
   const { toast } = useToast()
 
@@ -217,6 +218,44 @@ export default function Instances() {
     }
   }
 
+  const handleConfigureWebhooks = async () => {
+    if (!urlServidor || !globalApiKey) {
+      toast({
+        title: 'Aviso',
+        description: 'Configure a API Global primeiro nas Configurações.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsConfiguringWebhooks(true)
+    let successCount = 0
+    let errorCount = 0
+
+    for (const instance of instances) {
+      try {
+        await instancesService.configureWebhook(urlServidor, globalApiKey, instance.name)
+        successCount++
+      } catch (error: any) {
+        errorCount++
+        toast({
+          title: `Erro em ${instance.name}`,
+          description: error.message || 'Falha ao configurar webhook',
+          variant: 'destructive',
+        })
+      }
+    }
+
+    setIsConfiguringWebhooks(false)
+
+    if (successCount > 0) {
+      toast({
+        title: 'Concluído',
+        description: `Webhooks configurados com sucesso em ${successCount} instância(s).`,
+      })
+    }
+  }
+
   const handleSync = async () => {
     setIsSyncing(true)
     try {
@@ -262,11 +301,25 @@ export default function Instances() {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Instâncias WhatsApp</h1>
           <p className="text-slate-500">Gerencie suas conexões da Evolution API.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
           {canManageConfig && (
-            <Button variant="outline" onClick={() => setIsConfigModalOpen(true)}>
-              <Settings className="mr-2 h-4 w-4" /> Configurações Globais API
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={handleConfigureWebhooks}
+                disabled={isConfiguringWebhooks || instances.length === 0}
+              >
+                {isConfiguringWebhooks ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Webhook className="mr-2 h-4 w-4" />
+                )}
+                Configurar Webhooks
+              </Button>
+              <Button variant="outline" onClick={() => setIsConfigModalOpen(true)}>
+                <Settings className="mr-2 h-4 w-4" /> Configurações Globais API
+              </Button>
+            </>
           )}
           <Button onClick={() => setIsModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" /> Nova Instância

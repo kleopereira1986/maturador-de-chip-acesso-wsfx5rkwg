@@ -45,4 +45,31 @@ export const instancesService = {
     const { error } = await supabase.from('whatsapp_instances').delete().eq('id', id)
     if (error) throw error
   },
+  async configureWebhook(url_servidor: string, global_api_key: string, instance_name: string) {
+    const webhookUrl = 'https://uidafexgwtplfnjrgoyi.supabase.co/functions/v1/evolution-webhook'
+    const res = await fetch(`${url_servidor}/webhook/set/${instance_name}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: global_api_key,
+      },
+      body: JSON.stringify({
+        url: webhookUrl,
+        enabled: true,
+        events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+      }),
+    })
+
+    if (!res.ok) {
+      let errorMessage = `Erro HTTP ${res.status}`
+      try {
+        const errData = await res.json()
+        errorMessage = errData?.response?.message?.[0] || errData?.message || errorMessage
+      } catch (e) {
+        // Ignora caso não seja JSON
+      }
+      throw new Error(errorMessage)
+    }
+    return await res.json()
+  },
 }
