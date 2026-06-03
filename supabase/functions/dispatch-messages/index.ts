@@ -115,7 +115,9 @@ Deno.serve(async (req) => {
         const instance = availableInstances[i % availableInstances.length]
 
         const parseMessage = (text: string, leadName: string | null) => {
-          let parsed = text.replace(/\{\{nome\}\}/gi, leadName || 'Amigo(a)')
+          let parsed = text
+            .replace(/\{\{nome\}\}/gi, leadName || 'Cliente')
+            .replace(/\{nome\}/gi, leadName || 'Cliente')
           const spintaxRegex = /\{([^{}]+)\}/g
           let match
           while ((match = spintaxRegex.exec(parsed)) !== null) {
@@ -124,10 +126,19 @@ Deno.serve(async (req) => {
             parsed = parsed.replace(match[0], randomOption)
             spintaxRegex.lastIndex = 0
           }
-          return parsed
+          return parsed.trim()
         }
 
         const messageText = parseMessage(campaign.message_text, item.lead_name)
+
+        if (!messageText) {
+          await supabase
+            .from('dispatch_queue')
+            .update({ status: 'FAILED', error_message: 'Mensagem vazia após processamento' })
+            .eq('id', item.id)
+          totalProcessed++
+          continue
+        }
 
         // Automated Phone Cleaning
         let cleanPhone = item.phone.replace(/\D/g, '')
@@ -147,6 +158,8 @@ Deno.serve(async (req) => {
           evolutionEndpoint = `/message/sendText/${instance.name}`
           payload = {
             number: cleanPhone,
+            textMessage: { text: messageText },
+            options: { delay: delayMs },
             text: messageText,
             delay: delayMs,
           }
@@ -192,11 +205,7 @@ Deno.serve(async (req) => {
             const errorData = await res.text()
             await supabase
               .from('dispatch_queue')
-              .update({
-                status: 'ERROR',
-                error_message: `API Error ${res.status}: ${errorData}`,
-                phone: cleanPhone,
-              })
+              .update({ status: 'FAILED', error_message: errorData, phone: cleanPhone })
               .eq('id', item.id)
             console.error(`Evolution API Error for ${cleanPhone}:`, errorData)
           }
@@ -204,7 +213,7 @@ Deno.serve(async (req) => {
           await supabase
             .from('dispatch_queue')
             .update({
-              status: 'ERROR',
+              status: 'FAILED',
               error_message: `Fetch Error: ${err.message}`,
               phone: cleanPhone,
             })

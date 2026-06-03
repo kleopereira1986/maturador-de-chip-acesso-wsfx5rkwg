@@ -159,7 +159,7 @@ export default function Campaigns() {
   }
 
   const handleSave = async () => {
-    if (!form.name || !form.message_text || form.instance_ids.length === 0) {
+    if (!form.name || !form.message_text.trim() || form.instance_ids.length === 0) {
       toast({
         title: 'Atenção',
         description: 'Preencha nome, mensagem e selecione pelo menos uma instância.',
@@ -431,8 +431,13 @@ export default function Campaigns() {
                 placeholder="Spintax suportado: {Oi|Olá} {{nome}}, tudo bem?"
                 value={form.message_text}
                 onChange={(e) => setForm({ ...form, message_text: e.target.value })}
-                className="h-28"
+                className={`h-28 ${!form.message_text.trim() ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
               />
+              {!form.message_text.trim() && (
+                <p className="text-xs text-red-500 font-medium">
+                  O texto da mensagem é obrigatório
+                </p>
+              )}
               <p className="text-[10px] text-slate-500">
                 Use {'{texto1|texto2}'} para variações aleatórias e {'{{nome}}'} para inserir o nome
                 do lead.
@@ -568,7 +573,10 @@ export default function Campaigns() {
             <Button
               onClick={handleSave}
               disabled={
-                !form.name || !form.message_text || isSaving || form.instance_ids.length === 0
+                !form.name ||
+                !form.message_text.trim() ||
+                isSaving ||
+                form.instance_ids.length === 0
               }
             >
               {isSaving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
