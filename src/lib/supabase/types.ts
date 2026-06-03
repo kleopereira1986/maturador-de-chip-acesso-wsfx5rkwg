@@ -542,6 +542,11 @@ export const Constants = {
 
 // --- ROW LEVEL SECURITY POLICIES ---
 // Table: campaigns
+//   Policy "Campaigns Corretor all own" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (created_by = auth.uid()))
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (created_by = auth.uid()))
+//   Policy "Campaigns Corretor select participating" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND ((created_by = auth.uid()) OR (EXISTS ( SELECT 1    FROM whatsapp_instances wi   WHERE ((wi.owner_id = auth.uid()) AND (wi.id = ANY (campaigns.instance_ids)))))))
 //   Policy "Campaigns Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
@@ -549,12 +554,17 @@ export const Constants = {
 //   Policy "Configuracoes API Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//   Policy "Configuracoes API authenticated select" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: true
 // Table: dialer_queue
 //   Policy "DialerQueue Corretor SELECT" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = 'corretor'::text)
 //   Policy "DialerQueue Master/Gerente ALL" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: dispatch_queue
+//   Policy "DispatchQueue Corretor all own" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'corretor'::text) AND (campaign_id IN ( SELECT campaigns.id    FROM campaigns   WHERE (campaigns.created_by = auth.uid()))))
+//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (campaign_id IN ( SELECT campaigns.id    FROM campaigns   WHERE (campaigns.created_by = auth.uid()))))
 //   Policy "DispatchQueue Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))

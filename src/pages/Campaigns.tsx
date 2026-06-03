@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import Dialer from '@/pages/Dialer'
 import {
   Select,
   SelectContent,
@@ -282,129 +284,143 @@ export default function Campaigns() {
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Campanhas (Disparador)
-          </h1>
-          <p className="text-slate-500">
-            Disparo em massa com Spintax, delays e round-robin entre instâncias.
-          </p>
-        </div>
-        <Button onClick={() => setIsModalOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" /> Nova Campanha
-        </Button>
-      </div>
+      <Tabs defaultValue="whatsapp" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="whatsapp">Campanhas WhatsApp</TabsTrigger>
+          <TabsTrigger value="dialer">Discador SIP</TabsTrigger>
+        </TabsList>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {isLoading ? (
-          <div className="col-span-full flex justify-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <TabsContent value="whatsapp" className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                Campanhas (Disparador)
+              </h1>
+              <p className="text-slate-500">
+                Disparo em massa com Spintax, delays e round-robin entre instâncias.
+              </p>
+            </div>
+            <Button onClick={() => setIsModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Nova Campanha
+            </Button>
           </div>
-        ) : campaigns.length === 0 ? (
-          <div className="col-span-full text-center text-slate-500 py-10 bg-slate-50 border border-dashed rounded-lg">
-            Nenhuma campanha encontrada. Comece criando uma nova.
-          </div>
-        ) : (
-          campaigns.map((c) => {
-            const s = stats[c.id] || { total: 0, sent: 0, failed: 0, pending: 0 }
-            const progress = s.total > 0 ? ((s.sent + s.failed) / s.total) * 100 : 0
 
-            return (
-              <Card key={c.id} className="overflow-hidden flex flex-col">
-                <CardHeader className="bg-slate-50/80 pb-4 border-b">
-                  <div className="flex justify-between items-start">
-                    <div className="pr-4">
-                      <CardTitle className="text-xl flex items-center gap-2">
-                        {c.name}
-                        <Badge
-                          variant={c.status === 'DISPARANDO' ? 'default' : 'secondary'}
-                          className="text-[10px]"
-                        >
-                          {c.status}
-                        </Badge>
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2 mt-2 text-xs h-8">
-                        {c.message_text}
-                      </CardDescription>
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      {s.failed > 0 && (
+          <div className="grid gap-4 md:grid-cols-2">
+            {isLoading ? (
+              <div className="col-span-full flex justify-center py-10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : campaigns.length === 0 ? (
+              <div className="col-span-full text-center text-slate-500 py-10 bg-slate-50 border border-dashed rounded-lg">
+                Nenhuma campanha encontrada. Comece criando uma nova.
+              </div>
+            ) : (
+              campaigns.map((c) => {
+                const s = stats[c.id] || { total: 0, sent: 0, failed: 0, pending: 0 }
+                const progress = s.total > 0 ? ((s.sent + s.failed) / s.total) * 100 : 0
+
+                return (
+                  <Card key={c.id} className="overflow-hidden flex flex-col">
+                    <CardHeader className="bg-slate-50/80 pb-4 border-b">
+                      <div className="flex justify-between items-start">
+                        <div className="pr-4">
+                          <CardTitle className="text-xl flex items-center gap-2">
+                            {c.name}
+                            <Badge
+                              variant={c.status === 'DISPARANDO' ? 'default' : 'secondary'}
+                              className="text-[10px]"
+                            >
+                              {c.status}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription className="line-clamp-2 mt-2 text-xs h-8">
+                            {c.message_text}
+                          </CardDescription>
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0">
+                          {s.failed > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => openErrorLog(c.id)}
+                              className="text-orange-500 hover:text-orange-700 hover:bg-orange-50"
+                              title="Ver Erros"
+                            >
+                              <AlertCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteCamp(c.id)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-4 flex-1 flex flex-col justify-between">
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex justify-between mb-1 text-xs">
+                            <span className="font-medium text-slate-700">Envios</span>
+                            <span className="text-slate-500 font-medium">
+                              {s.sent} de {s.total} ({Math.round(progress)}%)
+                            </span>
+                          </div>
+                          <Progress value={progress} className="h-2" />
+                          <div className="flex justify-between mt-1 text-[10px] text-slate-500">
+                            <span>
+                              Pendentes: {s.pending} | Processando: {s.processing || 0}
+                            </span>
+                            <span className="text-red-500">Falhas: {s.failed}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs text-slate-600 bg-slate-50 p-2 rounded-md border">
+                          <span className="font-medium">Mídia:</span> {c.media_type}
+                          <span className="mx-1">•</span>
+                          <span className="font-medium">Delay:</span> {c.min_delay}s - {c.max_delay}
+                          s<span className="mx-1">•</span>
+                          <span className="font-medium">Instâncias:</span>{' '}
+                          {c.instance_ids?.length || 0}
+                        </div>
+                      </div>
+
+                      <div className="mt-6">
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openErrorLog(c.id)}
-                          className="text-orange-500 hover:text-orange-700 hover:bg-orange-50"
-                          title="Ver Erros"
+                          variant={c.status === 'DISPARANDO' ? 'outline' : 'default'}
+                          className="w-full"
+                          onClick={() => toggleStatus(c)}
                         >
-                          <AlertCircle className="h-4 w-4" />
+                          {c.status === 'DISPARANDO' ? (
+                            <>
+                              <Pause className="mr-2 h-4 w-4" /> Pausar Disparos
+                            </>
+                          ) : (
+                            <>
+                              <Play className="mr-2 h-4 w-4" />{' '}
+                              {progress === 100 && s.total > 0 ? 'Concluído' : 'Iniciar Disparos'}
+                            </>
+                          )}
                         </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => deleteCamp(c.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-4 flex-1 flex flex-col justify-between">
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex justify-between mb-1 text-xs">
-                        <span className="font-medium text-slate-700">Envios</span>
-                        <span className="text-slate-500 font-medium">
-                          {s.sent} de {s.total} ({Math.round(progress)}%)
-                        </span>
                       </div>
-                      <Progress value={progress} className="h-2" />
-                      <div className="flex justify-between mt-1 text-[10px] text-slate-500">
-                        <span>
-                          Pendentes: {s.pending} | Processando: {s.processing || 0}
-                        </span>
-                        <span className="text-red-500">Falhas: {s.failed}</span>
-                      </div>
-                    </div>
+                    </CardContent>
+                  </Card>
+                )
+              })
+            )}
+          </div>
+        </TabsContent>
 
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-600 bg-slate-50 p-2 rounded-md border">
-                      <span className="font-medium">Mídia:</span> {c.media_type}
-                      <span className="mx-1">•</span>
-                      <span className="font-medium">Delay:</span> {c.min_delay}s - {c.max_delay}s
-                      <span className="mx-1">•</span>
-                      <span className="font-medium">Instâncias:</span> {c.instance_ids?.length || 0}
-                    </div>
-                  </div>
-
-                  <div className="mt-6">
-                    <Button
-                      variant={c.status === 'DISPARANDO' ? 'outline' : 'default'}
-                      className="w-full"
-                      onClick={() => toggleStatus(c)}
-                    >
-                      {c.status === 'DISPARANDO' ? (
-                        <>
-                          <Pause className="mr-2 h-4 w-4" /> Pausar Disparos
-                        </>
-                      ) : (
-                        <>
-                          <Play className="mr-2 h-4 w-4" />{' '}
-                          {progress === 100 && s.total > 0 ? 'Concluído' : 'Iniciar Disparos'}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })
-        )}
-      </div>
+        <TabsContent value="dialer">
+          <Dialer />
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={isModalOpen} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
