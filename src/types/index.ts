@@ -61,3 +61,10 @@ export type DialerQueue = {
   created_at: string
   updated_at: string
 }
+
+export type ConfiguracoesApi = {
+  id: string
+  url_servidor: string
+  global_api_key: string
+  atualizado_em: string
+}

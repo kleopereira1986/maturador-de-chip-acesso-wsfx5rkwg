@@ -398,7 +398,7 @@ export const Constants = {
 //   message_text: text (not null)
 //   media_url: text (nullable)
 //   media_type: text (not null, default: 'TEXT'::text)
-//   status: text (not null, default: 'WAITING'::text)
+//   status: text (not null, default: 'AGUARDANDO'::text)
 //   created_by: uuid (nullable)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
@@ -438,7 +438,7 @@ export const Constants = {
 //   id: uuid (not null, default: gen_random_uuid())
 //   name: text (not null)
 //   token: text (not null)
-//   status: text (not null, default: 'DISCONNECTED'::text)
+//   status: text (not null, default: 'DESCONECTADO'::text)
 //   owner_id: uuid (nullable)
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
@@ -469,9 +469,10 @@ export const Constants = {
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: dialer_queue
-//   Policy "DialerQueue All Corretor read, Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
-//     USING: true
-//     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
+//   Policy "DialerQueue Corretor SELECT" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = 'corretor'::text)
+//   Policy "DialerQueue Master/Gerente ALL" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: dispatch_queue
 //   Policy "DispatchQueue Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
@@ -483,6 +484,9 @@ export const Constants = {
 // Table: profiles
 //   Policy "Corretor can read self" (SELECT, PERMISSIVE) roles={authenticated}
 //     USING: (id = auth.uid())
+//   Policy "Corretor can update self" (UPDATE, PERMISSIVE) roles={authenticated}
+//     USING: (id = auth.uid())
+//     WITH CHECK: (id = auth.uid())
 //   Policy "Gerente can manage corretor" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: ((get_my_role() = 'gerente'::text) AND (role = 'corretor'::text))
 //     WITH CHECK: ((get_my_role() = 'gerente'::text) AND (role = 'corretor'::text))
