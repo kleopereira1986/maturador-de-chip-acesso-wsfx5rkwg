@@ -8,6 +8,10 @@ import { ProtectedRoute } from '@/components/ProtectedRoute'
 import Index from './pages/Index'
 import Dashboard from './pages/Dashboard'
 import Users from './pages/Users'
+import Instances from './pages/Instances'
+import Campaigns from './pages/Campaigns'
+import Maturador from './pages/Maturador'
+import Dialer from './pages/Dialer'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 
@@ -29,7 +33,11 @@ const App = () => (
               {/* Role Restricted Routes */}
               <Route element={<ProtectedRoute allowedRoles={['master', 'gerente']} />}>
                 <Route path="/usuarios" element={<Users />} />
+                <Route path="/instancias" element={<Instances />} />
+                <Route path="/campanhas" element={<Campaigns />} />
+                <Route path="/maturador" element={<Maturador />} />
               </Route>
+              <Route path="/discador" element={<Dialer />} />
             </Route>
           </Route>
 

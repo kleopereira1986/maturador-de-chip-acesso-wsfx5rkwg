@@ -9,13 +9,58 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name: string
+          id: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string
+          id?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_create_user: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_password: string
+          p_role: string
+        }
+        Returns: string
+      }
+      admin_delete_user: { Args: { p_user_id: string }; Returns: undefined }
+      admin_update_user: {
+        Args: {
+          p_full_name: string
+          p_password?: string
+          p_role: string
+          p_user_id: string
+        }
+        Returns: undefined
+      }
+      get_my_role: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -153,3 +198,158 @@ export const Constants = {
 // IMPORTANT: The TypeScript types above map UUID, TEXT, VARCHAR all to "string".
 // Use the COLUMN TYPES section below to know the real PostgreSQL type for each column.
 // Always use the correct PostgreSQL type when writing SQL migrations.
+
+// --- COLUMN TYPES (actual PostgreSQL types) ---
+// Use this to know the real database type when writing migrations.
+// "string" in TypeScript types above may be uuid, text, varchar, timestamptz, etc.
+// Table: profiles
+//   id: uuid (not null)
+//   email: text (not null)
+//   full_name: text (not null)
+//   role: text (not null)
+//   created_at: timestamp with time zone (not null, default: now())
+//   updated_at: timestamp with time zone (not null, default: now())
+
+// --- CONSTRAINTS ---
+// Table: profiles
+//   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+//   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
+//   CHECK profiles_role_check: CHECK ((role = ANY (ARRAY['master'::text, 'gerente'::text, 'corretor'::text])))
+
+// --- ROW LEVEL SECURITY POLICIES ---
+// Table: profiles
+//   Policy "Corretor can read self" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (id = auth.uid())
+//   Policy "Gerente can manage corretor" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: ((get_my_role() = 'gerente'::text) AND (role = 'corretor'::text))
+//     WITH CHECK: ((get_my_role() = 'gerente'::text) AND (role = 'corretor'::text))
+//   Policy "Gerente can read all" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = 'gerente'::text)
+//   Policy "Master can do all" (ALL, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = 'master'::text)
+//     WITH CHECK: (get_my_role() = 'master'::text)
+
+// --- DATABASE FUNCTIONS ---
+// FUNCTION admin_create_user(text, text, text, text)
+//   CREATE OR REPLACE FUNCTION public.admin_create_user(p_email text, p_password text, p_full_name text, p_role text)
+//    RETURNS uuid
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   DECLARE
+//     v_user_id UUID;
+//     v_my_role TEXT;
+//   BEGIN
+//     v_my_role := public.get_my_role();
+//
+//     -- Permission checks
+//     IF v_my_role IS NULL OR v_my_role = 'corretor' THEN
+//       RAISE EXCEPTION 'Unauthorized: Only Master or Gerente can create users.';
+//     END IF;
+//
+//     IF v_my_role = 'gerente' AND p_role != 'corretor' THEN
+//       RAISE EXCEPTION 'Unauthorized: Gerentes can only create corretores.';
+//     END IF;
+//
+//     IF EXISTS (SELECT 1 FROM auth.users WHERE email = p_email) THEN
+//       RAISE EXCEPTION 'Um usuário com este email já existe.';
+//     END IF;
+//
+//     v_user_id := gen_random_uuid();
+//
+//     -- Insert into Auth schema
+//     INSERT INTO auth.users (
+//       id, instance_id, email, encrypted_password, email_confirmed_at,
+//       created_at, updated_at, raw_app_meta_data, raw_user_meta_data,
+//       is_super_admin, role, aud,
+//       confirmation_token, recovery_token, email_change_token_new,
+//       email_change, email_change_token_current, phone_change, phone_change_token, reauthentication_token, phone
+//     ) VALUES (
+//       v_user_id, '00000000-0000-0000-0000-000000000000', p_email, crypt(p_password, gen_salt('bf')), now(),
+//       now(), now(), '{"provider": "email", "providers": ["email"]}', jsonb_build_object('name', p_full_name),
+//       false, 'authenticated', 'authenticated',
+//       '', '', '', '', '', '', '', '', NULL
+//     );
+//
+//     -- Insert into Profiles
+//     INSERT INTO public.profiles (id, email, full_name, role)
+//     VALUES (v_user_id, p_email, p_full_name, p_role);
+//
+//     RETURN v_user_id;
+//   END;
+//   $function$
+//
+// FUNCTION admin_delete_user(uuid)
+//   CREATE OR REPLACE FUNCTION public.admin_delete_user(p_user_id uuid)
+//    RETURNS void
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   DECLARE
+//     v_my_role TEXT;
+//     v_target_role TEXT;
+//   BEGIN
+//     v_my_role := public.get_my_role();
+//     SELECT role INTO v_target_role FROM public.profiles WHERE id = p_user_id;
+//
+//     -- Permission checks
+//     IF v_my_role IS NULL OR v_my_role = 'corretor' THEN
+//       RAISE EXCEPTION 'Unauthorized: Only Master or Gerente can delete users.';
+//     END IF;
+//
+//     IF v_my_role = 'gerente' AND v_target_role != 'corretor' THEN
+//        RAISE EXCEPTION 'Unauthorized: Gerentes can only delete corretores.';
+//     END IF;
+//
+//     -- Delete from Auth schema (will cascade to profiles)
+//     DELETE FROM auth.users WHERE id = p_user_id;
+//   END;
+//   $function$
+//
+// FUNCTION admin_update_user(uuid, text, text, text)
+//   CREATE OR REPLACE FUNCTION public.admin_update_user(p_user_id uuid, p_full_name text, p_role text, p_password text DEFAULT NULL::text)
+//    RETURNS void
+//    LANGUAGE plpgsql
+//    SECURITY DEFINER
+//   AS $function$
+//   DECLARE
+//     v_my_role TEXT;
+//     v_target_role TEXT;
+//   BEGIN
+//     v_my_role := public.get_my_role();
+//     SELECT role INTO v_target_role FROM public.profiles WHERE id = p_user_id;
+//
+//     -- Permission checks
+//     IF v_my_role IS NULL OR v_my_role = 'corretor' THEN
+//       RAISE EXCEPTION 'Unauthorized: Only Master or Gerente can update users.';
+//     END IF;
+//
+//     IF v_my_role = 'gerente' THEN
+//       IF v_target_role != 'corretor' OR p_role != 'corretor' THEN
+//          RAISE EXCEPTION 'Unauthorized: Gerentes can only update corretores.';
+//       END IF;
+//     END IF;
+//
+//     -- Update Profile
+//     UPDATE public.profiles
+//     SET full_name = p_full_name, role = p_role, updated_at = now()
+//     WHERE id = p_user_id;
+//
+//     -- Update Password if provided
+//     IF p_password IS NOT NULL AND p_password != '' THEN
+//       UPDATE auth.users
+//       SET encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now()
+//       WHERE id = p_user_id;
+//     END IF;
+//   END;
+//   $function$
+//
+// FUNCTION get_my_role()
+//   CREATE OR REPLACE FUNCTION public.get_my_role()
+//    RETURNS text
+//    LANGUAGE sql
+//    STABLE SECURITY DEFINER
+//   AS $function$
+//     SELECT role FROM public.profiles WHERE id = auth.uid();
+//   $function$
+//

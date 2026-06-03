@@ -8,3 +8,56 @@ export interface Profile {
   created_at: string
   updated_at: string
 }
+
+export type WhatsappInstance = {
+  id: string
+  name: string
+  token: string
+  status: 'CONNECTED' | 'DISCONNECTED' | 'PAUSED'
+  owner_id: string
+  created_at: string
+  updated_at: string
+}
+
+export type Campaign = {
+  id: string
+  name: string
+  message_text: string
+  media_url: string | null
+  media_type: 'TEXT' | 'IMAGE' | 'AUDIO' | 'VIDEO'
+  status: 'WAITING' | 'SENDING' | 'PAUSED' | 'COMPLETED'
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export type DispatchQueue = {
+  id: string
+  campaign_id: string
+  instance_id: string | null
+  lead_name: string | null
+  phone: string
+  status: 'PENDING' | 'SENT' | 'FAILED'
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type MaturadorConfig = {
+  id: string
+  dialogue_tree: any
+  is_active: boolean
+  min_delay: number
+  max_delay: number
+  created_at: string
+  updated_at: string
+}
+
+export type DialerQueue = {
+  id: string
+  lead_name: string | null
+  phone: string
+  status: 'PENDING' | 'CONNECTED' | 'VOICEMAIL' | 'FAILED'
+  created_at: string
+  updated_at: string
+}

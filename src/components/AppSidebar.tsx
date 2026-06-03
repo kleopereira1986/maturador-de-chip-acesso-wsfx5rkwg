@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, Users, LogOut, Shield } from 'lucide-react'
+import { Home, Users, LogOut, Shield, Smartphone, Megaphone, Zap, PhoneCall } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import {
   Sidebar,
@@ -25,6 +25,30 @@ export function AppSidebar() {
       title: 'Início',
       url: '/dashboard',
       icon: Home,
+      roles: ['master', 'gerente', 'corretor'],
+    },
+    {
+      title: 'Instâncias WhatsApp',
+      url: '/instancias',
+      icon: Smartphone,
+      roles: ['master', 'gerente'],
+    },
+    {
+      title: 'Campanhas',
+      url: '/campanhas',
+      icon: Megaphone,
+      roles: ['master', 'gerente'],
+    },
+    {
+      title: 'Maturador',
+      url: '/maturador',
+      icon: Zap,
+      roles: ['master', 'gerente'],
+    },
+    {
+      title: 'Discador Preditivo',
+      url: '/discador',
+      icon: PhoneCall,
       roles: ['master', 'gerente', 'corretor'],
     },
     {
