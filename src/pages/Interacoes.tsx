@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
-import { MessageSquare, Send, User, CheckCircle2 } from 'lucide-react'
+import { MessageSquare, Send, User, CheckCircle2, Wifi, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -26,6 +26,10 @@ export default function Interacoes() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const [instancesMap, setInstancesMap] = useState<Record<string, WhatsappInstance>>({})
   const selectedContactRef = useRef(selectedContact)
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>(
+    'connecting',
+  )
+  const [lastEventTime, setLastEventTime] = useState<Date | null>(null)
 
   useEffect(() => {
     selectedContactRef.current = selectedContact
@@ -41,6 +45,7 @@ export default function Interacoes() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'whatsapp_messages' },
         (payload) => {
+          setLastEventTime(new Date())
           // Fetch pending list to update sidebar immediately without manual refresh
           fetchPending()
 
@@ -66,7 +71,10 @@ export default function Interacoes() {
           }
         },
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRealtimeStatus('connected')
+        else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setRealtimeStatus('error')
+      })
 
     return () => {
       supabase.removeChannel(channel)
@@ -226,6 +234,25 @@ export default function Interacoes() {
             <MessageSquare className="h-5 w-5 text-primary" />
             Interações Pendentes
           </h2>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
+            {realtimeStatus === 'connected' ? (
+              <Wifi className="h-3 w-3 text-green-500" />
+            ) : realtimeStatus === 'connecting' ? (
+              <Wifi className="h-3 w-3 text-yellow-500 animate-pulse" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-red-500" />
+            )}
+            <span>
+              {realtimeStatus === 'connected'
+                ? 'Sincronizado'
+                : realtimeStatus === 'connecting'
+                  ? 'Conectando...'
+                  : 'Desconectado'}
+            </span>
+            {lastEventTime && (
+              <span className="ml-1 opacity-70">(Último: {format(lastEventTime, 'HH:mm:ss')})</span>
+            )}
+          </div>
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-2">

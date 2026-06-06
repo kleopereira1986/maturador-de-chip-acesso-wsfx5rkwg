@@ -39,12 +39,21 @@ Deno.serve(async (req) => {
           const key = msgItem.key
           const pushName = msgItem.pushName || ''
 
-          // Check if fromMe is false (incoming customer response)
-          if (key && key.fromMe === false && msgData) {
+          // Process both incoming and outgoing messages
+          if (key && msgData) {
             const remoteJid = key.remoteJid
-            if (remoteJid && remoteJid.includes('@s.whatsapp.net')) {
+            // Avoid status broadcasts or non-standard JIDs
+            if (
+              remoteJid &&
+              remoteJid.includes('@s.whatsapp.net') &&
+              remoteJid !== 'status@broadcast'
+            ) {
               const contactPhone = remoteJid.split('@')[0]
-              const contactName = pushName
+              const contactName = pushName || null
+
+              const isIncoming = key.fromMe === false
+              const direction = isIncoming ? 'incoming' : 'outgoing'
+              const isResponded = !isIncoming // Outgoing messages mean we responded
 
               let messageBody =
                 msgData.conversation ||
@@ -87,8 +96,8 @@ Deno.serve(async (req) => {
                     contact_phone: contactPhone,
                     contact_name: contactName,
                     message_body: messageBody,
-                    direction: 'incoming',
-                    is_responded: false,
+                    direction: direction,
+                    is_responded: isResponded,
                   })
 
                   if (insertError) {
