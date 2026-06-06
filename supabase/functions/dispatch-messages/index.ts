@@ -208,7 +208,10 @@ Deno.serve(async (req) => {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                apikey: instance.token || config.global_api_key,
+                apikey:
+                  instance.token && instance.token.trim() !== ''
+                    ? instance.token
+                    : config.global_api_key,
               },
               body: JSON.stringify(payload),
             })

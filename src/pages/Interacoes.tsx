@@ -28,6 +28,7 @@ export default function Interacoes() {
     phone: string
     instance_id: string
     name: string | null
+    remote_jid?: string | null
   } | null>(null)
   const [messages, setMessages] = useState<WhatsappMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
@@ -209,21 +210,30 @@ export default function Interacoes() {
       const instance = instancesMap[selectedContact.instance_id]
       if (!instance) throw new Error('Instância não encontrada')
 
-      // LID Sanitization & Phone Number Extraction
-      let cleanPhone = selectedContact.phone.replace(/@lid/gi, '').replace(/\D/g, '')
+      // Dest Number Logic & Sanitization
+      let destination = selectedContact.remote_jid || selectedContact.phone
 
-      // Add default country code if missing
-      if (cleanPhone.length >= 10 && cleanPhone.length <= 11 && !cleanPhone.startsWith('55')) {
-        cleanPhone = '55' + cleanPhone
+      // If a number contains @lid, strip this suffix to use the numeric ID.
+      if (destination.includes('@lid')) {
+        destination = destination.replace(/@lid/gi, '')
+      } else if (destination.includes('@s.whatsapp.net')) {
+        destination = destination.replace(/@s\.whatsapp\.net/gi, '')
       }
 
-      // Validation to ensure it's a routable phone number and not an unresolved LID
-      // LIDs are usually 15+ digits, while WhatsApp numbers are typically 10-14 digits.
-      if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 14) {
-        console.error(`Invalid recipient identifier: ${selectedContact.phone}`)
-        throw new Error(
-          'O identificador do destinatário é inválido ou não pôde ser resolvido a partir do @lid.',
-        )
+      // Sanitize to only numbers if it's not a group
+      if (!destination.includes('@g.us')) {
+        destination = destination.replace(/\D/g, '')
+        // Add default country code if missing for normal numbers
+        // Note: LIDs are often 15+ digits, so we only prepend 55 for standard BR lengths (10-11)
+        if (destination.length >= 10 && destination.length <= 11 && !destination.startsWith('55')) {
+          destination = '55' + destination
+        }
+      }
+
+      // Allow up to 30 characters to support long numeric LIDs
+      if (!destination || destination.length < 10 || destination.length > 30) {
+        console.error(`Invalid recipient identifier: ${destination}`)
+        throw new Error('O identificador do destinatário é inválido ou não pôde ser resolvido.')
       }
 
       const { data: config, error: configError } = await supabase
@@ -240,10 +250,11 @@ export default function Interacoes() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: config.global_api_key,
+          apikey:
+            instance.token && instance.token.trim() !== '' ? instance.token : config.global_api_key,
         },
         body: JSON.stringify({
-          number: cleanPhone,
+          number: destination,
           textMessage: { text: newMessage.trim() },
         }),
       })
@@ -336,6 +347,7 @@ export default function Interacoes() {
                       phone: contact.contact_phone,
                       instance_id: contact.instance_id,
                       name: contact.contact_name,
+                      remote_jid: (contact as any).remote_jid,
                     })
                   }
                   className={cn(

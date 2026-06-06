@@ -65,8 +65,43 @@ Deno.serve(async (req) => {
       `[MATURADOR-WORKER] Interaction simulated: [${inst1.name}] -> [${inst2.name}]: "${phrase}"`,
     )
 
-    // Here you would call Evolution API to actually dispatch the WhatsApp message to inst2 phone number using inst1 token.
-    // const evolutionResponse = await fetch(...)
+    const { data: apiConfig } = await supabase
+      .from('configuracoes_api')
+      .select('*')
+      .limit(1)
+      .single()
+    if (!apiConfig || !apiConfig.url_servidor) {
+      return new Response(JSON.stringify({ message: 'API config not found' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Call Evolution API to dispatch the WhatsApp message to inst2 phone number using inst1 token.
+    let inst2Phone = inst2.name.replace(/\D/g, '')
+    // Assuming instance names sometimes contain the phone number, or we need an actual phone
+    // If instance name doesn't contain a phone, this might fail unless Evolution resolves it.
+    // Ideally we should know inst2's phone. For now we use the digits in its name as a fallback.
+    if (inst2Phone.length >= 10 && !inst2Phone.startsWith('55')) inst2Phone = '55' + inst2Phone
+
+    try {
+      if (inst2Phone.length >= 10) {
+        await fetch(`${apiConfig.url_servidor}/message/sendText/${inst1.name}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey:
+              inst1.token && inst1.token.trim() !== '' ? inst1.token : apiConfig.global_api_key,
+          },
+          body: JSON.stringify({
+            number: inst2Phone,
+            textMessage: { text: phrase },
+            options: { delay: 1000, presence: 'composing' },
+          }),
+        })
+      }
+    } catch (e: any) {
+      console.error('Failed to send maturador message:', e.message)
+    }
 
     return new Response(
       JSON.stringify({

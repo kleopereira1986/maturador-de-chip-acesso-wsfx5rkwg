@@ -31,7 +31,12 @@ Deno.serve(async (req) => {
     }
 
     // Evolution API webhook payload for messages
-    if (event === 'messages.upsert' || event === 'messages_upsert') {
+    if (
+      event === 'messages.upsert' ||
+      event === 'messages_upsert' ||
+      event === 'send.message' ||
+      event === 'send_message'
+    ) {
       const instanceName = body.instance || body.instanceName
       const rootSender = body.sender
 
@@ -47,22 +52,58 @@ Deno.serve(async (req) => {
 
       for (const msgItem of messagesToProcess) {
         try {
-          const msgData = msgItem.message
-          const key = msgItem.key
+          const msgData = msgItem.message || msgItem
+          const key = msgItem.key || {
+            remoteJid: msgItem.remoteJid,
+            id: msgItem.id || msgItem.messageId,
+            fromMe: msgItem.fromMe !== false,
+          }
           const pushName = msgItem.pushName || ''
 
           // Process both incoming and outgoing messages
-          if (key && msgData) {
+          if (
+            key &&
+            (msgData.conversation ||
+              msgData.extendedTextMessage ||
+              msgData.imageMessage ||
+              msgData.videoMessage ||
+              msgData.documentMessage ||
+              msgData.audioMessage ||
+              msgData.text)
+          ) {
             const remoteJid = key.remoteJid
             const messageId = key.id
             // Avoid status broadcasts or non-standard JIDs
             if (remoteJid && remoteJid !== 'status@broadcast' && !remoteJid.includes('@g.us')) {
+              const isIncoming = key.fromMe === false && !event?.includes('send')
+              const direction = isIncoming ? 'incoming' : 'outgoing'
+              const isResponded = !isIncoming // Outgoing messages mean we responded
+
+              // Prevent Self-Messaging Loop
+              const potentialSender = normalizePhone(
+                rootSender || msgItem.sender || msgData.sender || key.participant || instanceName,
+              )
+              const destNumber = normalizePhone(remoteJid)
+
+              if (!isIncoming && potentialSender && destNumber && potentialSender === destNumber) {
+                console.log('Self-Messaging Loop prevented: sender matches remoteJid', destNumber)
+                continue
+              }
+
               let contactPhone = ''
 
               if (remoteJid.endsWith('@lid')) {
-                const sender = rootSender || msgItem.sender || msgData.sender || key.participant
-                if (sender) {
-                  contactPhone = normalizePhone(sender)
+                if (isIncoming) {
+                  const sender = rootSender || msgItem.sender || msgData.sender || key.participant
+                  if (sender && normalizePhone(sender) !== normalizePhone(remoteJid)) {
+                    contactPhone = normalizePhone(sender)
+                  } else {
+                    contactPhone = normalizePhone(remoteJid)
+                  }
+                } else {
+                  // For outgoing messages to @lid, we must use the destination (remoteJid) as the contact phone
+                  // instead of the sender (which would be our own instance number).
+                  contactPhone = normalizePhone(remoteJid)
                 }
               } else {
                 contactPhone = normalizePhone(remoteJid)
@@ -72,13 +113,10 @@ Deno.serve(async (req) => {
 
               const contactName = pushName || null
 
-              const isIncoming = key.fromMe === false
-              const direction = isIncoming ? 'incoming' : 'outgoing'
-              const isResponded = !isIncoming // Outgoing messages mean we responded
-
               let messageBody =
                 msgData.conversation ||
                 msgData.extendedTextMessage?.text ||
+                msgData.text ||
                 msgData.imageMessage?.caption ||
                 msgData.videoMessage?.caption ||
                 msgData.documentMessage?.caption ||
@@ -120,7 +158,7 @@ Deno.serve(async (req) => {
                     .maybeSingle()
 
                   if (!existingMsg) {
-                    const { error: insertError } = await supabase.from('whatsapp_messages').insert({
+                    const insertPayload: any = {
                       instance_id: instance.id,
                       contact_phone: contactPhone,
                       contact_name: contactName,
@@ -128,7 +166,14 @@ Deno.serve(async (req) => {
                       direction: direction,
                       is_responded: isResponded,
                       message_id: messageId,
-                    })
+                    }
+
+                    // Conditionally add remote_jid if column exists (managed by migration)
+                    insertPayload['remote_jid'] = remoteJid
+
+                    const { error: insertError } = await supabase
+                      .from('whatsapp_messages')
+                      .insert(insertPayload)
 
                     if (insertError) {
                       if (insertError.code === '23505') {
