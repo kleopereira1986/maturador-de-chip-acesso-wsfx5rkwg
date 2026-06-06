@@ -1,6 +1,10 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { normalizePhone } from '../_shared/utils.ts'
+
+function normalizePhone(identifier: string | null | undefined): string {
+  if (!identifier) return ''
+  return identifier.split('@')[0].replace(/\D/g, '')
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
