@@ -204,14 +204,12 @@ Deno.serve(async (req) => {
           }
 
           try {
+            console.log(`[Campaign Dispatch] Sending message via ${instance.name} to ${cleanPhone}`)
             const res = await fetch(`${config.url_servidor}${evolutionEndpoint}`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                apikey:
-                  instance.token && instance.token.trim() !== ''
-                    ? instance.token
-                    : config.global_api_key,
+                apikey: config.global_api_key,
               },
               body: JSON.stringify(payload),
             })

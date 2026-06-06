@@ -300,6 +300,7 @@ export type Database = {
           is_responded: boolean
           message_body: string
           message_id: string | null
+          remote_jid: string | null
         }
         Insert: {
           contact_name?: string | null
@@ -311,6 +312,7 @@ export type Database = {
           is_responded?: boolean
           message_body: string
           message_id?: string | null
+          remote_jid?: string | null
         }
         Update: {
           contact_name?: string | null
@@ -322,6 +324,7 @@ export type Database = {
           is_responded?: boolean
           message_body?: string
           message_id?: string | null
+          remote_jid?: string | null
         }
         Relationships: [
           {
@@ -596,6 +599,7 @@ export const Constants = {
 //   is_responded: boolean (not null, default: false)
 //   created_at: timestamp with time zone (not null, default: now())
 //   message_id: text (nullable)
+//   remote_jid: text (nullable)
 
 // --- CONSTRAINTS ---
 // Table: campaigns

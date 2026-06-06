@@ -213,21 +213,28 @@ export default function Interacoes() {
       // Dest Number Logic & Sanitization
       let destination = selectedContact.remote_jid || selectedContact.phone
 
-      // If a number contains @lid, strip this suffix to use the numeric ID.
+      // If a number contains @lid or @s.whatsapp.net, strip this suffix
       if (destination.includes('@lid')) {
-        destination = destination.replace(/@lid/gi, '')
+        destination = destination.split('@')[0]
       } else if (destination.includes('@s.whatsapp.net')) {
-        destination = destination.replace(/@s\.whatsapp\.net/gi, '')
+        destination = destination.split('@')[0]
       }
 
       // Sanitize to only numbers if it's not a group
       if (!destination.includes('@g.us')) {
         destination = destination.replace(/\D/g, '')
         // Add default country code if missing for normal numbers
-        // Note: LIDs are often 15+ digits, so we only prepend 55 for standard BR lengths (10-11)
         if (destination.length >= 10 && destination.length <= 11 && !destination.startsWith('55')) {
           destination = '55' + destination
         }
+      }
+
+      // Check to prevent self-messaging (instance sending to itself)
+      const instancePhone = instance.name.replace(/\D/g, '')
+      if (instancePhone && destination === instancePhone) {
+        throw new Error(
+          'Não é possível enviar mensagem para o próprio número da instância (loop evitado).',
+        )
       }
 
       // Allow up to 30 characters to support long numeric LIDs
@@ -243,15 +250,18 @@ export default function Interacoes() {
         .maybeSingle()
 
       if (configError) throw new Error(`Erro ao buscar configuração: ${configError.message}`)
-      if (!config) throw new Error('Configuração de API não encontrada')
+      if (!config || !config.global_api_key)
+        throw new Error('Configuração de API não encontrada ou sem Global API Key')
 
       const endpoint = `${config.url_servidor}/message/sendText/${instance.name}`
+
+      console.log(`[Dispatch] Sending message via ${instance.name} to ${destination}`)
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey:
-            instance.token && instance.token.trim() !== '' ? instance.token : config.global_api_key,
+          apikey: config.global_api_key,
         },
         body: JSON.stringify({
           number: destination,

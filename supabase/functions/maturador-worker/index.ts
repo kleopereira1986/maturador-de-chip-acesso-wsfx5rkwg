@@ -85,12 +85,12 @@ Deno.serve(async (req) => {
 
     try {
       if (inst2Phone.length >= 10) {
+        console.log(`[Maturador Worker] Sending message via ${inst1.name} to ${inst2Phone}`)
         await fetch(`${apiConfig.url_servidor}/message/sendText/${inst1.name}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            apikey:
-              inst1.token && inst1.token.trim() !== '' ? inst1.token : apiConfig.global_api_key,
+            apikey: apiConfig.global_api_key,
           },
           body: JSON.stringify({
             number: inst2Phone,
