@@ -37,12 +37,35 @@ export default function Interacoes() {
 
     const channel = supabase
       .channel('whatsapp_messages_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'whatsapp_messages' }, () => {
-        fetchPending()
-        if (selectedContactRef.current) {
-          fetchMessages(selectedContactRef.current.instance_id, selectedContactRef.current.phone)
-        }
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'whatsapp_messages' },
+        (payload) => {
+          // Fetch pending list to update sidebar immediately without manual refresh
+          fetchPending()
+
+          // If a contact is selected, check if we need to append the new message to the chat view
+          if (selectedContactRef.current) {
+            if (
+              payload.eventType === 'INSERT' &&
+              payload.new &&
+              payload.new.instance_id === selectedContactRef.current.instance_id &&
+              payload.new.contact_phone === selectedContactRef.current.phone
+            ) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === payload.new.id)) return prev
+                return [...prev, payload.new as WhatsappMessage]
+              })
+            } else {
+              // For updates or deletions, fallback to full fetch
+              fetchMessages(
+                selectedContactRef.current.instance_id,
+                selectedContactRef.current.phone,
+              )
+            }
+          }
+        },
+      )
       .subscribe()
 
     return () => {

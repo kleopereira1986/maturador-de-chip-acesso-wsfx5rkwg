@@ -655,12 +655,12 @@ export const Constants = {
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: whatsapp_messages
 //   Policy "Messages Corretor insert" (INSERT, PERMISSIVE) roles={authenticated}
-//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//     WITH CHECK: ((get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text])) OR ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid())))))
 //   Policy "Messages Corretor select" (SELECT, PERMISSIVE) roles={authenticated}
-//     USING: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//     USING: ((get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text])) OR ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid())))))
 //   Policy "Messages Corretor update" (UPDATE, PERMISSIVE) roles={authenticated}
-//     USING: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
-//     WITH CHECK: ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid()))))
+//     USING: ((get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text])) OR ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid())))))
+//     WITH CHECK: ((get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text])) OR ((get_my_role() = 'corretor'::text) AND (instance_id IN ( SELECT whatsapp_instances.id    FROM whatsapp_instances   WHERE (whatsapp_instances.owner_id = auth.uid())))))
 //   Policy "Messages Master/Gerente all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 //     WITH CHECK: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))

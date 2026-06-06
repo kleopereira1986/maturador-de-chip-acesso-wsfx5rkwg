@@ -21,53 +21,85 @@ Deno.serve(async (req) => {
 
     // Evolution API webhook payload for messages
     if (event === 'messages.upsert' || event === 'messages_upsert') {
-      const instanceName = body.instance
+      const instanceName = body.instance || body.instanceName
 
-      // Support for different Evolution API payload structures (v1 vs v2)
-      let msgData = body.data?.message
-      let key = body.data?.key
-      let pushName = body.data?.pushName || ''
+      let messagesToProcess: any[] = []
 
-      if (!msgData && Array.isArray(body.data) && body.data.length > 0) {
-        msgData = body.data[0]?.message
-        key = body.data[0]?.key
-        pushName = body.data[0]?.pushName || ''
-      } else if (!msgData && body.data?.messages && Array.isArray(body.data.messages)) {
-        msgData = body.data.messages[0]?.message
-        key = body.data.messages[0]?.key
-        pushName = body.data.messages[0]?.pushName || ''
+      if (Array.isArray(body.data)) {
+        messagesToProcess = body.data
+      } else if (body.data?.messages && Array.isArray(body.data.messages)) {
+        messagesToProcess = body.data.messages
+      } else if (body.data) {
+        messagesToProcess = [body.data]
       }
 
-      if (key && !key.fromMe && msgData) {
-        const remoteJid = key.remoteJid
-        if (remoteJid && remoteJid.includes('@s.whatsapp.net')) {
-          const contactPhone = remoteJid.split('@')[0]
-          const contactName = pushName
-          const messageBody =
-            msgData.conversation ||
-            msgData.extendedTextMessage?.text ||
-            msgData.imageMessage?.caption ||
-            msgData.videoMessage?.caption ||
-            ''
+      for (const msgItem of messagesToProcess) {
+        try {
+          const msgData = msgItem.message
+          const key = msgItem.key
+          const pushName = msgItem.pushName || ''
 
-          if (messageBody && instanceName) {
-            const { data: instance } = await supabase
-              .from('whatsapp_instances')
-              .select('id')
-              .eq('name', instanceName)
-              .single()
+          // Check if fromMe is false (incoming customer response)
+          if (key && key.fromMe === false && msgData) {
+            const remoteJid = key.remoteJid
+            if (remoteJid && remoteJid.includes('@s.whatsapp.net')) {
+              const contactPhone = remoteJid.split('@')[0]
+              const contactName = pushName
 
-            if (instance) {
-              await supabase.from('whatsapp_messages').insert({
-                instance_id: instance.id,
-                contact_phone: contactPhone,
-                contact_name: contactName,
-                message_body: messageBody,
-                direction: 'incoming',
-                is_responded: false,
-              })
+              let messageBody =
+                msgData.conversation ||
+                msgData.extendedTextMessage?.text ||
+                msgData.imageMessage?.caption ||
+                msgData.videoMessage?.caption ||
+                msgData.documentMessage?.caption ||
+                msgData.audioMessage?.caption ||
+                ''
+
+              if (!messageBody) {
+                if (msgData.imageMessage) messageBody = '📷 Imagem'
+                else if (msgData.videoMessage) messageBody = '🎥 Vídeo'
+                else if (msgData.audioMessage) messageBody = '🎵 Áudio'
+                else if (msgData.documentMessage) messageBody = '📄 Documento'
+                else if (msgData.stickerMessage) messageBody = '🧩 Figurinha'
+                else if (msgData.contactMessage) messageBody = '👤 Contato'
+                else if (msgData.locationMessage) messageBody = '📍 Localização'
+                else messageBody = 'Mensagem não suportada'
+              }
+
+              if (instanceName) {
+                const { data: instance, error: instanceError } = await supabase
+                  .from('whatsapp_instances')
+                  .select('id')
+                  .eq('name', instanceName)
+                  .single()
+
+                if (instanceError) {
+                  console.error(
+                    `Instance not found or error fetching: ${instanceName}`,
+                    instanceError,
+                  )
+                  continue
+                }
+
+                if (instance) {
+                  const { error: insertError } = await supabase.from('whatsapp_messages').insert({
+                    instance_id: instance.id,
+                    contact_phone: contactPhone,
+                    contact_name: contactName,
+                    message_body: messageBody,
+                    direction: 'incoming',
+                    is_responded: false,
+                  })
+
+                  if (insertError) {
+                    console.error('Error inserting message into DB:', insertError)
+                  }
+                }
+              }
             }
           }
+        } catch (msgErr: any) {
+          console.error('Error processing individual message mapping:', msgErr.message)
         }
       }
     }
@@ -89,10 +121,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Return 200 OK to Evolution API to prevent webhook retries
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (error: any) {
+    console.error('Webhook global processing error:', error.message, error.stack)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
