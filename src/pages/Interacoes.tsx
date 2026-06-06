@@ -22,14 +22,18 @@ import { WhatsappMessage, WhatsappInstance, WebhookLog } from '@/types'
 
 const formatPhone = (phone: string | null | undefined) => {
   if (!phone) return ''
-  const cleaned = phone.replace(/\D/g, '')
+  let cleanPhone = phone
+  if (cleanPhone.includes('@')) {
+    cleanPhone = cleanPhone.split('@')[0]
+  }
+  const cleaned = cleanPhone.replace(/\D/g, '')
   if (cleaned.startsWith('55') && cleaned.length === 13) {
     return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`
   }
   if (cleaned.startsWith('55') && cleaned.length === 12) {
     return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 8)}-${cleaned.slice(8)}`
   }
-  return phone
+  return cleaned ? `+${cleaned}` : phone
 }
 
 export default function Interacoes() {
@@ -287,14 +291,20 @@ export default function Interacoes() {
         let errorMessage = 'Falha ao enviar mensagem pela API. Verifique a conexão da instância.'
         try {
           const errData = await res.json()
-          if (typeof errData?.message === 'string') {
-            errorMessage = errData.message
-          } else if (Array.isArray(errData?.message)) {
-            errorMessage = errData.message.join(', ')
-          } else if (Array.isArray(errData?.response?.message)) {
-            errorMessage = errData.response.message.join(', ')
-          } else if (typeof errData?.response?.message === 'string') {
-            errorMessage = errData.response.message
+          if (errData?.response?.data?.message) {
+            errorMessage = errData.response.data.message
+          } else if (errData?.response?.message) {
+            errorMessage = Array.isArray(errData.response.message)
+              ? errData.response.message.join(', ')
+              : errData.response.message
+          } else if (errData?.data?.message) {
+            errorMessage = Array.isArray(errData.data.message)
+              ? errData.data.message.join(', ')
+              : errData.data.message
+          } else if (errData?.message) {
+            errorMessage = Array.isArray(errData.message)
+              ? errData.message.join(', ')
+              : errData.message
           } else if (errData?.error) {
             errorMessage =
               typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error)
@@ -426,21 +436,19 @@ export default function Interacoes() {
                   </Avatar>
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <p className="font-medium truncate text-sm leading-tight">
-                      {contact.contact_name || formatPhone(contact.contact_phone)}
+                      {contact.contact_name || 'Desconhecido'}
                     </p>
-                    {contact.contact_name && (
-                      <p
-                        className={cn(
-                          'text-[10px] mb-0.5 truncate',
-                          selectedContact?.phone === contact.contact_phone &&
-                            selectedContact?.instance_id === contact.instance_id
-                            ? 'text-primary-foreground/70'
-                            : 'text-slate-400',
-                        )}
-                      >
-                        {formatPhone(contact.contact_phone)}
-                      </p>
-                    )}
+                    <p
+                      className={cn(
+                        'text-[10px] mb-0.5 truncate',
+                        selectedContact?.phone === contact.contact_phone &&
+                          selectedContact?.instance_id === contact.instance_id
+                          ? 'text-primary-foreground/70'
+                          : 'text-slate-400',
+                      )}
+                    >
+                      {formatPhone(contact.contact_phone)}
+                    </p>
                     <p
                       className={cn(
                         'text-xs truncate mt-0.5',
