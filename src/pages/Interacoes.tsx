@@ -226,11 +226,13 @@ export default function Interacoes() {
         )
       }
 
-      const { data: config } = await supabase
+      const { data: config, error: configError } = await supabase
         .from('configuracoes_api')
         .select('*')
         .limit(1)
-        .single()
+        .maybeSingle()
+
+      if (configError) throw new Error(`Erro ao buscar configuração: ${configError.message}`)
       if (!config) throw new Error('Configuração de API não encontrada')
 
       const endpoint = `${config.url_servidor}/message/sendText/${instance.name}`
@@ -238,7 +240,7 @@ export default function Interacoes() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: instance.token || config.global_api_key,
+          apikey: config.global_api_key,
         },
         body: JSON.stringify({
           number: cleanPhone,
@@ -247,7 +249,14 @@ export default function Interacoes() {
       })
 
       if (!res.ok) {
-        throw new Error('Falha ao enviar mensagem pela API')
+        let errorMessage = 'Falha ao enviar mensagem pela API'
+        try {
+          const errData = await res.json()
+          errorMessage = errData?.response?.message?.[0] || errData?.message || errorMessage
+        } catch (e) {
+          // Ignora caso não seja JSON
+        }
+        throw new Error(errorMessage)
       }
 
       const { error } = await supabase.from('whatsapp_messages').insert({
