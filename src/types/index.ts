@@ -84,6 +84,7 @@ export type WhatsappMessage = {
   message_body: string
   direction: 'incoming' | 'outgoing'
   is_responded: boolean
+  message_id?: string | null
   created_at: string
 }
 

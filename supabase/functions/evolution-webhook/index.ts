@@ -52,13 +52,22 @@ Deno.serve(async (req) => {
           // Process both incoming and outgoing messages
           if (key && msgData) {
             const remoteJid = key.remoteJid
+            const messageId = key.id
             // Avoid status broadcasts or non-standard JIDs
-            if (
-              remoteJid &&
-              remoteJid.includes('@s.whatsapp.net') &&
-              remoteJid !== 'status@broadcast'
-            ) {
-              const contactPhone = remoteJid.split('@')[0]
+            if (remoteJid && remoteJid !== 'status@broadcast' && !remoteJid.includes('@g.us')) {
+              let contactPhone = ''
+
+              if (remoteJid.endsWith('@lid')) {
+                const sender = msgItem.sender || msgData.sender || key.participant
+                if (sender) {
+                  contactPhone = sender.split('@')[0]
+                }
+              } else if (remoteJid.includes('@s.whatsapp.net')) {
+                contactPhone = remoteJid.split('@')[0]
+              }
+
+              if (!contactPhone) continue
+
               const contactName = pushName || null
 
               const isIncoming = key.fromMe === false
@@ -101,17 +110,32 @@ Deno.serve(async (req) => {
                 }
 
                 if (instance) {
-                  const { error: insertError } = await supabase.from('whatsapp_messages').insert({
-                    instance_id: instance.id,
-                    contact_phone: contactPhone,
-                    contact_name: contactName,
-                    message_body: messageBody,
-                    direction: direction,
-                    is_responded: isResponded,
-                  })
+                  // Check if message already exists to ensure idempotency
+                  const { data: existingMsg } = await supabase
+                    .from('whatsapp_messages')
+                    .select('id')
+                    .eq('message_id', messageId)
+                    .maybeSingle()
 
-                  if (insertError) {
-                    console.error('Error inserting message into DB:', insertError)
+                  if (!existingMsg) {
+                    const { error: insertError } = await supabase.from('whatsapp_messages').insert({
+                      instance_id: instance.id,
+                      contact_phone: contactPhone,
+                      contact_name: contactName,
+                      message_body: messageBody,
+                      direction: direction,
+                      is_responded: isResponded,
+                      message_id: messageId,
+                    })
+
+                    if (insertError) {
+                      if (insertError.code === '23505') {
+                        // Unique constraint violation
+                        console.log('Duplicate message skipped via unique constraint:', messageId)
+                      } else {
+                        console.error('Error inserting message into DB:', insertError)
+                      }
+                    }
                   }
                 }
               }

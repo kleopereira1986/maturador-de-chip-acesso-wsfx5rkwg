@@ -227,6 +227,27 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_logs: {
+        Row: {
+          created_at: string
+          event_type: string | null
+          id: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          payload?: Json
+        }
+        Update: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          payload?: Json
+        }
+        Relationships: []
+      }
       whatsapp_instances: {
         Row: {
           created_at: string
@@ -548,6 +569,11 @@ export const Constants = {
 //   sip_extension: text (nullable)
 //   sip_password: text (nullable)
 //   sip_domain: text (nullable)
+// Table: webhook_logs
+//   id: uuid (not null, default: gen_random_uuid())
+//   payload: jsonb (not null, default: '{}'::jsonb)
+//   event_type: text (nullable)
+//   created_at: timestamp with time zone (not null, default: now())
 // Table: whatsapp_instances
 //   id: uuid (not null, default: gen_random_uuid())
 //   name: text (not null)
@@ -585,6 +611,8 @@ export const Constants = {
 //   FOREIGN KEY profiles_id_fkey: FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
 //   PRIMARY KEY profiles_pkey: PRIMARY KEY (id)
 //   CHECK profiles_role_check: CHECK ((role = ANY (ARRAY['master'::text, 'gerente'::text, 'corretor'::text])))
+// Table: webhook_logs
+//   PRIMARY KEY webhook_logs_pkey: PRIMARY KEY (id)
 // Table: whatsapp_instances
 //   UNIQUE whatsapp_instances_name_key: UNIQUE (name)
 //   FOREIGN KEY whatsapp_instances_owner_id_fkey: FOREIGN KEY (owner_id) REFERENCES profiles(id) ON DELETE CASCADE
@@ -640,6 +668,9 @@ export const Constants = {
 //   Policy "Master can do all" (ALL, PERMISSIVE) roles={authenticated}
 //     USING: (get_my_role() = 'master'::text)
 //     WITH CHECK: (get_my_role() = 'master'::text)
+// Table: webhook_logs
+//   Policy "Webhook logs select master gerente" (SELECT, PERMISSIVE) roles={authenticated}
+//     USING: (get_my_role() = ANY (ARRAY['master'::text, 'gerente'::text]))
 // Table: whatsapp_instances
 //   Policy "Instances Corretor delete self" (DELETE, PERMISSIVE) roles={authenticated}
 //     USING: ((get_my_role() = 'corretor'::text) AND (owner_id = auth.uid()))

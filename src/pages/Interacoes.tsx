@@ -38,6 +38,7 @@ export default function Interacoes() {
   const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'error'>(
     'connecting',
   )
+  const [realtimeError, setRealtimeError] = useState<string | null>(null)
   const [lastEventTime, setLastEventTime] = useState<Date | null>(null)
   const [logs, setLogs] = useState<WebhookLog[]>([])
 
@@ -102,15 +103,20 @@ export default function Interacoes() {
       )
     }
 
-    channel.subscribe((status) => {
+    channel.subscribe((status, err) => {
       if (status === 'SUBSCRIBED') {
         setRealtimeStatus('connected')
+        setRealtimeError(null)
         toast({ title: 'Conexão Real-time', description: 'Sistema Online e escutando eventos.' })
       } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
         setRealtimeStatus('error')
+        const errorMsg = err
+          ? (err as any).message || JSON.stringify(err)
+          : 'A comunicação em tempo real falhou.'
+        setRealtimeError(errorMsg)
         toast({
           title: 'Conexão Perdida',
-          description: 'A comunicação em tempo real falhou. Clique em Testar Conexão.',
+          description: `Erro: ${errorMsg}`,
           variant: 'destructive',
         })
       }
@@ -367,8 +373,16 @@ export default function Interacoes() {
                   Conectando...
                 </span>
               ) : (
-                <span className="text-red-600 dark:text-red-400 flex items-center gap-1.5">
-                  🔴 Conexão Perdida
+                <span
+                  className="text-red-600 dark:text-red-400 flex items-center gap-1.5"
+                  title={realtimeError || 'Erro de conexão'}
+                >
+                  🔴 Conexão Perdida{' '}
+                  {realtimeError && (
+                    <span className="text-[10px] ml-1 opacity-80 truncate max-w-[150px]">
+                      ({realtimeError})
+                    </span>
+                  )}
                 </span>
               )}
             </div>
