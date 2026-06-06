@@ -86,3 +86,10 @@ export type WhatsappMessage = {
   is_responded: boolean
   created_at: string
 }
+
+export type WebhookLog = {
+  id: string
+  payload: any
+  event_type: string | null
+  created_at: string
+}

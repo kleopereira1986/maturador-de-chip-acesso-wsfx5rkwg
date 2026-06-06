@@ -1,15 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { supabase } from '@/lib/supabase/client'
-import { MessageSquare, Send, User, CheckCircle2, Wifi, WifiOff } from 'lucide-react'
+import {
+  MessageSquare,
+  Send,
+  User,
+  CheckCircle2,
+  RefreshCw,
+  ChevronDown,
+  Activity,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useToast } from '@/hooks/use-toast'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
-import { WhatsappMessage, WhatsappInstance } from '@/types'
+import { WhatsappMessage, WhatsappInstance, WebhookLog } from '@/types'
 
 export default function Interacoes() {
   const { profile } = useAuth()
@@ -30,26 +39,38 @@ export default function Interacoes() {
     'connecting',
   )
   const [lastEventTime, setLastEventTime] = useState<Date | null>(null)
+  const [logs, setLogs] = useState<WebhookLog[]>([])
 
   useEffect(() => {
     selectedContactRef.current = selectedContact
   }, [selectedContact])
 
-  useEffect(() => {
-    fetchInstances()
-    fetchPending()
+  const fetchLogs = async () => {
+    if (profile?.role !== 'master' && profile?.role !== 'gerente') return
+    const { data } = await supabase
+      .from('webhook_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5)
+
+    if (data) setLogs(data as WebhookLog[])
+  }
+
+  const setupRealtime = () => {
+    setRealtimeStatus('connecting')
+
+    // Remove existing channels
+    supabase.getChannels().forEach((ch) => supabase.removeChannel(ch))
 
     const channel = supabase
-      .channel('whatsapp_messages_changes')
+      .channel('interacoes_realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'whatsapp_messages' },
         (payload) => {
           setLastEventTime(new Date())
-          // Fetch pending list to update sidebar immediately without manual refresh
           fetchPending()
 
-          // If a contact is selected, check if we need to append the new message to the chat view
           if (selectedContactRef.current) {
             if (
               payload.eventType === 'INSERT' &&
@@ -62,7 +83,6 @@ export default function Interacoes() {
                 return [...prev, payload.new as WhatsappMessage]
               })
             } else {
-              // For updates or deletions, fallback to full fetch
               fetchMessages(
                 selectedContactRef.current.instance_id,
                 selectedContactRef.current.phone,
@@ -71,15 +91,45 @@ export default function Interacoes() {
           }
         },
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setRealtimeStatus('connected')
-        else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setRealtimeStatus('error')
-      })
+
+    if (profile?.role === 'master' || profile?.role === 'gerente') {
+      channel.on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'webhook_logs' },
+        (payload) => {
+          setLogs((prev) => [payload.new as WebhookLog, ...prev].slice(0, 5))
+        },
+      )
+    }
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        setRealtimeStatus('connected')
+        toast({ title: 'Conexão Real-time', description: 'Sistema Online e escutando eventos.' })
+      } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        setRealtimeStatus('error')
+        toast({
+          title: 'Conexão Perdida',
+          description: 'A comunicação em tempo real falhou. Clique em Testar Conexão.',
+          variant: 'destructive',
+        })
+      }
+    })
+  }
+
+  useEffect(() => {
+    fetchInstances()
+    fetchPending()
+
+    if (profile) {
+      fetchLogs()
+      setupRealtime()
+    }
 
     return () => {
-      supabase.removeChannel(channel)
+      supabase.getChannels().forEach((ch) => supabase.removeChannel(ch))
     }
-  }, [])
+  }, [profile])
 
   useEffect(() => {
     if (selectedContact) {
@@ -235,23 +285,8 @@ export default function Interacoes() {
             Interações Pendentes
           </h2>
           <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-            {realtimeStatus === 'connected' ? (
-              <Wifi className="h-3 w-3 text-green-500" />
-            ) : realtimeStatus === 'connecting' ? (
-              <Wifi className="h-3 w-3 text-yellow-500 animate-pulse" />
-            ) : (
-              <WifiOff className="h-3 w-3 text-red-500" />
-            )}
-            <span>
-              {realtimeStatus === 'connected'
-                ? 'Sincronizado'
-                : realtimeStatus === 'connecting'
-                  ? 'Conectando...'
-                  : 'Desconectado'}
-            </span>
-            {lastEventTime && (
-              <span className="ml-1 opacity-70">(Último: {format(lastEventTime, 'HH:mm:ss')})</span>
-            )}
+            {lastEventTime && <span>Último evento: {format(lastEventTime, 'HH:mm:ss')}</span>}
+            {!lastEventTime && <span>Aguardando eventos...</span>}
           </div>
         </div>
         <ScrollArea className="flex-1">
@@ -313,6 +348,85 @@ export default function Interacoes() {
             )}
           </div>
         </ScrollArea>
+
+        {/* Diagnostic Panel */}
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 font-medium text-sm">
+              {realtimeStatus === 'connected' ? (
+                <span className="text-green-600 dark:text-green-400 flex items-center gap-1.5">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                  </span>
+                  🟢 Sistema Online
+                </span>
+              ) : realtimeStatus === 'connecting' ? (
+                <span className="text-yellow-600 dark:text-yellow-400 flex items-center gap-1.5">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  Conectando...
+                </span>
+              ) : (
+                <span className="text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                  🔴 Conexão Perdida
+                </span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={setupRealtime}
+            >
+              Testar Conexão
+            </Button>
+          </div>
+
+          {(profile?.role === 'master' || profile?.role === 'gerente') && (
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-xs h-7 flex items-center justify-between text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5" /> Ver Logs Técnicos
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <ScrollArea className="h-40 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-950/50">
+                  <div className="p-2 space-y-2">
+                    {logs.length === 0 ? (
+                      <div className="text-xs text-center text-slate-500 py-4">
+                        Nenhum log recente.
+                      </div>
+                    ) : (
+                      logs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs"
+                        >
+                          <div className="flex justify-between items-center mb-1 text-[10px] text-slate-500">
+                            <span className="font-mono text-primary font-medium">
+                              {log.event_type}
+                            </span>
+                            <span>{format(new Date(log.created_at), 'HH:mm:ss')}</span>
+                          </div>
+                          <pre className="text-[10px] overflow-x-auto text-slate-700 dark:text-slate-300 font-mono">
+                            {JSON.stringify(log.payload, null, 2)}
+                          </pre>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+        </div>
       </div>
 
       {/* Área de Chat */}

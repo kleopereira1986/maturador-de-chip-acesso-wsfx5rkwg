@@ -19,6 +19,16 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const event = body.event?.toLowerCase()
 
+    // Log the webhook payload
+    try {
+      await supabase.from('webhook_logs').insert({
+        payload: body,
+        event_type: event || 'unknown',
+      })
+    } catch (logErr: any) {
+      console.error('Error logging webhook:', logErr.message)
+    }
+
     // Evolution API webhook payload for messages
     if (event === 'messages.upsert' || event === 'messages_upsert') {
       const instanceName = body.instance || body.instanceName
