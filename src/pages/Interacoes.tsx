@@ -79,6 +79,7 @@ export default function Interacoes() {
     const { data, error } = await supabase
       .from('whatsapp_messages')
       .select('*')
+      .eq('direction', 'incoming')
       .eq('is_responded', false)
       .order('created_at', { ascending: false })
 

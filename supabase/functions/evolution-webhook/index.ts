@@ -22,14 +22,27 @@ Deno.serve(async (req) => {
     // Evolution API webhook payload for messages
     if (event === 'messages.upsert' || event === 'messages_upsert') {
       const instanceName = body.instance
-      const msgData = body.data?.message
-      const key = body.data?.key
+
+      // Support for different Evolution API payload structures (v1 vs v2)
+      let msgData = body.data?.message
+      let key = body.data?.key
+      let pushName = body.data?.pushName || ''
+
+      if (!msgData && Array.isArray(body.data) && body.data.length > 0) {
+        msgData = body.data[0]?.message
+        key = body.data[0]?.key
+        pushName = body.data[0]?.pushName || ''
+      } else if (!msgData && body.data?.messages && Array.isArray(body.data.messages)) {
+        msgData = body.data.messages[0]?.message
+        key = body.data.messages[0]?.key
+        pushName = body.data.messages[0]?.pushName || ''
+      }
 
       if (key && !key.fromMe && msgData) {
         const remoteJid = key.remoteJid
         if (remoteJid && remoteJid.includes('@s.whatsapp.net')) {
           const contactPhone = remoteJid.split('@')[0]
-          const contactName = body.data?.pushName || ''
+          const contactName = pushName
           const messageBody =
             msgData.conversation ||
             msgData.extendedTextMessage?.text ||
