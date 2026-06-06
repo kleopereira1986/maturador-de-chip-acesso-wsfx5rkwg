@@ -209,6 +209,23 @@ export default function Interacoes() {
       const instance = instancesMap[selectedContact.instance_id]
       if (!instance) throw new Error('Instância não encontrada')
 
+      // LID Sanitization & Phone Number Extraction
+      let cleanPhone = selectedContact.phone.replace(/@lid/gi, '').replace(/\D/g, '')
+
+      // Add default country code if missing
+      if (cleanPhone.length >= 10 && cleanPhone.length <= 11 && !cleanPhone.startsWith('55')) {
+        cleanPhone = '55' + cleanPhone
+      }
+
+      // Validation to ensure it's a routable phone number and not an unresolved LID
+      // LIDs are usually 15+ digits, while WhatsApp numbers are typically 10-14 digits.
+      if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 14) {
+        console.error(`Invalid recipient identifier: ${selectedContact.phone}`)
+        throw new Error(
+          'O identificador do destinatário é inválido ou não pôde ser resolvido a partir do @lid.',
+        )
+      }
+
       const { data: config } = await supabase
         .from('configuracoes_api')
         .select('*')
@@ -224,7 +241,7 @@ export default function Interacoes() {
           apikey: instance.token || config.global_api_key,
         },
         body: JSON.stringify({
-          number: selectedContact.phone,
+          number: cleanPhone,
           textMessage: { text: newMessage.trim() },
         }),
       })
@@ -235,7 +252,7 @@ export default function Interacoes() {
 
       const { error } = await supabase.from('whatsapp_messages').insert({
         instance_id: instance.id,
-        contact_phone: selectedContact.phone,
+        contact_phone: selectedContact.phone, // Mantém o contact_phone original para consistência da conversa
         contact_name: selectedContact.name,
         message_body: newMessage.trim(),
         direction: 'outgoing',
