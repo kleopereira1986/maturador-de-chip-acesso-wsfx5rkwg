@@ -20,6 +20,18 @@ import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { WhatsappMessage, WhatsappInstance, WebhookLog } from '@/types'
 
+const formatPhone = (phone: string | null | undefined) => {
+  if (!phone) return ''
+  const cleaned = phone.replace(/\D/g, '')
+  if (cleaned.startsWith('55') && cleaned.length === 13) {
+    return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 9)}-${cleaned.slice(9)}`
+  }
+  if (cleaned.startsWith('55') && cleaned.length === 12) {
+    return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 8)}-${cleaned.slice(8)}`
+  }
+  return phone
+}
+
 export default function Interacoes() {
   const { profile } = useAuth()
   const { toast } = useToast()
@@ -213,11 +225,13 @@ export default function Interacoes() {
       // Dest Number Logic & Sanitization
       let destination = selectedContact.remote_jid || selectedContact.phone
 
-      // If a number contains @lid or @s.whatsapp.net, strip this suffix
-      if (destination.includes('@lid')) {
-        destination = destination.split('@')[0]
-      } else if (destination.includes('@s.whatsapp.net')) {
-        destination = destination.split('@')[0]
+      // If a number contains any suffix (like @lid or @s.whatsapp.net), strip it completely
+      if (destination.includes('@')) {
+        const parts = destination.split('@')
+        if (parts[1] !== 'g.us') {
+          // Do not strip @g.us as it's required for groups
+          destination = parts[0]
+        }
       }
 
       // Sanitize to only numbers if it's not a group
@@ -270,12 +284,23 @@ export default function Interacoes() {
       })
 
       if (!res.ok) {
-        let errorMessage = 'Falha ao enviar mensagem pela API'
+        let errorMessage = 'Falha ao enviar mensagem pela API. Verifique a conexão da instância.'
         try {
           const errData = await res.json()
-          errorMessage = errData?.response?.message?.[0] || errData?.message || errorMessage
+          if (typeof errData?.message === 'string') {
+            errorMessage = errData.message
+          } else if (Array.isArray(errData?.message)) {
+            errorMessage = errData.message.join(', ')
+          } else if (Array.isArray(errData?.response?.message)) {
+            errorMessage = errData.response.message.join(', ')
+          } else if (typeof errData?.response?.message === 'string') {
+            errorMessage = errData.response.message
+          } else if (errData?.error) {
+            errorMessage =
+              typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error)
+          }
         } catch (e) {
-          // Ignora caso não seja JSON
+          // Fallback caso não seja JSON
         }
         throw new Error(errorMessage)
       }
@@ -293,9 +318,27 @@ export default function Interacoes() {
 
       setNewMessage('')
     } catch (error: any) {
+      let description = 'Erro ao enviar mensagem. Verifique a conexão da instância.'
+
+      if (error instanceof Error && error.message) {
+        description = error.message
+      } else if (typeof error === 'string') {
+        description = error
+      } else if (error && typeof error === 'object') {
+        try {
+          description = JSON.stringify(error)
+        } catch {
+          /* intentionally ignored */
+        }
+      }
+
+      if (description === '[object Object]') {
+        description = 'Erro ao enviar mensagem pela API. Formato de resposta inválido.'
+      }
+
       toast({
         title: 'Erro ao enviar',
-        description: error.message,
+        description,
         variant: 'destructive',
       })
     } finally {
@@ -381,16 +424,29 @@ export default function Interacoes() {
                       <User className="h-5 w-5" />
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
-                      {contact.contact_name || contact.contact_phone}
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <p className="font-medium truncate text-sm leading-tight">
+                      {contact.contact_name || formatPhone(contact.contact_phone)}
                     </p>
+                    {contact.contact_name && (
+                      <p
+                        className={cn(
+                          'text-[10px] mb-0.5 truncate',
+                          selectedContact?.phone === contact.contact_phone &&
+                            selectedContact?.instance_id === contact.instance_id
+                            ? 'text-primary-foreground/70'
+                            : 'text-slate-400',
+                        )}
+                      >
+                        {formatPhone(contact.contact_phone)}
+                      </p>
+                    )}
                     <p
                       className={cn(
-                        'text-xs truncate',
+                        'text-xs truncate mt-0.5',
                         selectedContact?.phone === contact.contact_phone &&
                           selectedContact?.instance_id === contact.instance_id
-                          ? 'text-primary-foreground/80'
+                          ? 'text-primary-foreground/90'
                           : 'text-slate-500',
                       )}
                     >
@@ -504,8 +560,12 @@ export default function Interacoes() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-medium">{selectedContact.name || selectedContact.phone}</h3>
-                  <p className="text-xs text-slate-500">
+                  <h3 className="font-medium leading-tight">
+                    {selectedContact.name
+                      ? `${selectedContact.name} - ${formatPhone(selectedContact.phone)}`
+                      : formatPhone(selectedContact.phone)}
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
                     Via {instancesMap[selectedContact.instance_id]?.name || '...'}
                   </p>
                 </div>
