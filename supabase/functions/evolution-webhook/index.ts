@@ -53,12 +53,13 @@ Deno.serve(async (req) => {
       for (const msgItem of messagesToProcess) {
         try {
           const msgData = msgItem.message || msgItem
-          const key = msgItem.key || {
-            remoteJid: msgItem.remoteJid,
-            id: msgItem.id || msgItem.messageId,
-            fromMe: msgItem.fromMe !== false,
-          }
-          const pushName = msgItem.pushName || ''
+          const key = msgItem.key ||
+            msgData.key || {
+              remoteJid: msgItem.remoteJid || msgData.remoteJid,
+              id: msgItem.id || msgItem.messageId || msgData.messageId,
+              fromMe: msgItem.fromMe !== false,
+            }
+          const pushName = msgItem.pushName || msgData.pushName || ''
 
           // Process both incoming and outgoing messages
           if (
@@ -79,34 +80,28 @@ Deno.serve(async (req) => {
               const direction = isIncoming ? 'incoming' : 'outgoing'
               const isResponded = !isIncoming // Outgoing messages mean we responded
 
-              // Prevent Self-Messaging Loop
-              const potentialSender = normalizePhone(
-                rootSender || msgItem.sender || msgData.sender || key.participant || instanceName,
-              )
-              const destNumber = normalizePhone(remoteJid)
-
-              if (!isIncoming && potentialSender && destNumber && potentialSender === destNumber) {
-                console.log('Self-Messaging Loop prevented: sender matches remoteJid', destNumber)
-                continue
-              }
-
               let contactPhone = ''
 
-              if (remoteJid.endsWith('@lid')) {
-                if (isIncoming) {
-                  const sender = rootSender || msgItem.sender || msgData.sender || key.participant
-                  if (sender && normalizePhone(sender) !== normalizePhone(remoteJid)) {
-                    contactPhone = normalizePhone(sender)
-                  } else {
-                    contactPhone = normalizePhone(remoteJid)
-                  }
-                } else {
-                  // For outgoing messages to @lid, we must use the destination (remoteJid) as the contact phone
-                  // instead of the sender (which would be our own instance number).
-                  contactPhone = normalizePhone(remoteJid)
-                }
+              // Extract the true remote JID (the client)
+              // If it's a group, keep the full group JID for proper routing, otherwise normalize to pure numeric
+              if (remoteJid && remoteJid.includes('@g.us')) {
+                contactPhone = remoteJid
               } else {
                 contactPhone = normalizePhone(remoteJid)
+              }
+
+              // Prevent Self-Messaging Loop or weird instance sender bugs
+              const potentialSender = normalizePhone(
+                rootSender || msgItem.sender || msgData.sender || key.participant,
+              )
+              if (
+                potentialSender &&
+                contactPhone &&
+                potentialSender === contactPhone &&
+                !isIncoming
+              ) {
+                console.log('Self-Messaging Loop prevented: sender matches remoteJid', contactPhone)
+                continue
               }
 
               if (!contactPhone) continue
@@ -166,10 +161,8 @@ Deno.serve(async (req) => {
                       direction: direction,
                       is_responded: isResponded,
                       message_id: messageId,
+                      remote_jid: remoteJid,
                     }
-
-                    // Conditionally add remote_jid if column exists (managed by migration)
-                    insertPayload['remote_jid'] = remoteJid
 
                     const { error: insertError } = await supabase
                       .from('whatsapp_messages')

@@ -227,19 +227,19 @@ export default function Interacoes() {
       if (!instance) throw new Error('Instância não encontrada')
 
       // Dest Number Logic & Sanitization
-      let destination = selectedContact.remote_jid || selectedContact.phone
+      // We prioritize the clean contact phone for 1-on-1 chats to ensure a pure numeric destination as requested.
+      // We fall back to remote_jid mainly for groups (@g.us).
+      let destination = selectedContact.phone || selectedContact.remote_jid
 
-      // If a number contains any suffix (like @lid or @s.whatsapp.net), strip it completely
-      if (destination.includes('@')) {
-        const parts = destination.split('@')
-        if (parts[1] !== 'g.us') {
-          // Do not strip @g.us as it's required for groups
-          destination = parts[0]
-        }
+      if (!destination) {
+        throw new Error('Destinatário inválido (sem número ou JID).')
       }
 
-      // Sanitize to only numbers if it's not a group
-      if (!destination.includes('@g.us')) {
+      // If it's a group, we MUST keep @g.us
+      if (selectedContact.remote_jid?.includes('@g.us')) {
+        destination = selectedContact.remote_jid
+      } else {
+        // Sanitize to pure numeric for 1-on-1
         destination = destination.replace(/\D/g, '')
         // Add default country code if missing for normal numbers
         if (destination.length >= 10 && destination.length <= 11 && !destination.startsWith('55')) {
@@ -292,19 +292,28 @@ export default function Interacoes() {
         try {
           const errData = await res.json()
           if (errData?.response?.data?.message) {
-            errorMessage = errData.response.data.message
+            errorMessage =
+              typeof errData.response.data.message === 'string'
+                ? errData.response.data.message
+                : JSON.stringify(errData.response.data.message)
           } else if (errData?.response?.message) {
             errorMessage = Array.isArray(errData.response.message)
               ? errData.response.message.join(', ')
-              : errData.response.message
+              : typeof errData.response.message === 'string'
+                ? errData.response.message
+                : JSON.stringify(errData.response.message)
           } else if (errData?.data?.message) {
             errorMessage = Array.isArray(errData.data.message)
               ? errData.data.message.join(', ')
-              : errData.data.message
+              : typeof errData.data.message === 'string'
+                ? errData.data.message
+                : JSON.stringify(errData.data.message)
           } else if (errData?.message) {
             errorMessage = Array.isArray(errData.message)
               ? errData.message.join(', ')
-              : errData.message
+              : typeof errData.message === 'string'
+                ? errData.message
+                : JSON.stringify(errData.message)
           } else if (errData?.error) {
             errorMessage =
               typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error)
@@ -312,6 +321,15 @@ export default function Interacoes() {
         } catch (e) {
           // Fallback caso não seja JSON
         }
+
+        // Ensure errorMessage is a string
+        if (typeof errorMessage !== 'string') {
+          errorMessage = String(errorMessage)
+        }
+        if (errorMessage === '[object Object]') {
+          errorMessage = 'Erro interno na API da Evolution.'
+        }
+
         throw new Error(errorMessage)
       }
 
@@ -336,7 +354,7 @@ export default function Interacoes() {
         description = error
       } else if (error && typeof error === 'object') {
         try {
-          description = JSON.stringify(error)
+          description = error.message || error.error || JSON.stringify(error)
         } catch {
           /* intentionally ignored */
         }
