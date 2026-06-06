@@ -299,6 +299,7 @@ export type Database = {
           instance_id: string
           is_responded: boolean
           message_body: string
+          message_id: string | null
         }
         Insert: {
           contact_name?: string | null
@@ -309,6 +310,7 @@ export type Database = {
           instance_id: string
           is_responded?: boolean
           message_body: string
+          message_id?: string | null
         }
         Update: {
           contact_name?: string | null
@@ -319,6 +321,7 @@ export type Database = {
           instance_id?: string
           is_responded?: boolean
           message_body?: string
+          message_id?: string | null
         }
         Relationships: [
           {
@@ -592,6 +595,7 @@ export const Constants = {
 //   direction: text (not null)
 //   is_responded: boolean (not null, default: false)
 //   created_at: timestamp with time zone (not null, default: now())
+//   message_id: text (nullable)
 
 // --- CONSTRAINTS ---
 // Table: campaigns
@@ -879,3 +883,4 @@ export const Constants = {
 //   CREATE INDEX idx_whatsapp_messages_created_at ON public.whatsapp_messages USING btree (created_at)
 //   CREATE INDEX idx_whatsapp_messages_instance_id ON public.whatsapp_messages USING btree (instance_id)
 //   CREATE INDEX idx_whatsapp_messages_is_responded ON public.whatsapp_messages USING btree (is_responded)
+//   CREATE UNIQUE INDEX whatsapp_messages_message_id_idx ON public.whatsapp_messages USING btree (message_id) WHERE (message_id IS NOT NULL)

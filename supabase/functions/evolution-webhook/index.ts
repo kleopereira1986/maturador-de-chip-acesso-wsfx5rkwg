@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { normalizePhone } from '../_shared/utils.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,6 +33,7 @@ Deno.serve(async (req) => {
     // Evolution API webhook payload for messages
     if (event === 'messages.upsert' || event === 'messages_upsert') {
       const instanceName = body.instance || body.instanceName
+      const rootSender = body.sender
 
       let messagesToProcess: any[] = []
 
@@ -58,12 +60,12 @@ Deno.serve(async (req) => {
               let contactPhone = ''
 
               if (remoteJid.endsWith('@lid')) {
-                const sender = msgItem.sender || msgData.sender || key.participant
+                const sender = rootSender || msgItem.sender || msgData.sender || key.participant
                 if (sender) {
-                  contactPhone = sender.split('@')[0]
+                  contactPhone = normalizePhone(sender)
                 }
-              } else if (remoteJid.includes('@s.whatsapp.net')) {
-                contactPhone = remoteJid.split('@')[0]
+              } else {
+                contactPhone = normalizePhone(remoteJid)
               }
 
               if (!contactPhone) continue

@@ -1,7 +1,7 @@
 {
   "_versions": {
     "dispatch-messages": 11,
-    "evolution-webhook": 9,
+    "evolution-webhook": 10,
     "sync-instances": 1,
     "maturador-worker": 1
   }
