@@ -88,16 +88,21 @@ Deno.serve(async (req) => {
 
               // Extract the true remote JID (the client)
               // If it's a group, keep the full group JID for proper routing, otherwise normalize to pure numeric
+              const rawSender = msgData.sender || msgItem.sender || rootSender || key.participant
+
               if (remoteJid && remoteJid.includes('@g.us')) {
                 contactPhone = remoteJid
               } else {
-                contactPhone = normalizePhone(remoteJid)
+                // Feature: Extract real phone from sender instead of remoteJid to avoid LIDs
+                if (isIncoming && rawSender) {
+                  contactPhone = normalizePhone(rawSender)
+                } else {
+                  contactPhone = normalizePhone(remoteJid)
+                }
               }
 
               // Prevent Self-Messaging Loop or weird instance sender bugs
-              const potentialSender = normalizePhone(
-                rootSender || msgItem.sender || msgData.sender || key.participant,
-              )
+              const potentialSender = normalizePhone(rawSender)
               if (
                 potentialSender &&
                 contactPhone &&

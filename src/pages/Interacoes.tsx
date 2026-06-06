@@ -33,7 +33,7 @@ const formatPhone = (phone: string | null | undefined) => {
   if (cleaned.startsWith('55') && cleaned.length === 12) {
     return `+55 (${cleaned.slice(2, 4)}) ${cleaned.slice(4, 8)}-${cleaned.slice(8)}`
   }
-  return cleaned ? `+${cleaned}` : phone
+  return cleaned || cleanPhone
 }
 
 export default function Interacoes() {
@@ -229,18 +229,23 @@ export default function Interacoes() {
       // Dest Number Logic & Sanitization
       // We prioritize the clean contact phone for 1-on-1 chats to ensure a pure numeric destination as requested.
       // We fall back to remote_jid mainly for groups (@g.us).
-      let destination = selectedContact.phone || selectedContact.remote_jid
+      let destination = selectedContact.remote_jid?.includes('@g.us')
+        ? selectedContact.remote_jid
+        : selectedContact.phone
 
       if (!destination) {
-        throw new Error('Destinatário inválido (sem número ou JID).')
+        throw new Error('Destinatário inválido (sem número).')
       }
 
       // If it's a group, we MUST keep @g.us
-      if (selectedContact.remote_jid?.includes('@g.us')) {
-        destination = selectedContact.remote_jid
-      } else {
+      if (!destination.includes('@g.us')) {
         // Sanitize to pure numeric for 1-on-1
         destination = destination.replace(/\D/g, '')
+
+        if (!destination || destination.length < 10) {
+          throw new Error('Número de destino inválido após sanitização (muito curto ou vazio).')
+        }
+
         // Add default country code if missing for normal numbers
         if (destination.length >= 10 && destination.length <= 11 && !destination.startsWith('55')) {
           destination = '55' + destination
@@ -324,10 +329,14 @@ export default function Interacoes() {
 
         // Ensure errorMessage is a string
         if (typeof errorMessage !== 'string') {
-          errorMessage = String(errorMessage)
+          try {
+            errorMessage = JSON.stringify(errorMessage)
+          } catch (e) {
+            errorMessage = String(errorMessage)
+          }
         }
-        if (errorMessage === '[object Object]') {
-          errorMessage = 'Erro interno na API da Evolution.'
+        if (errorMessage === '[object Object]' || errorMessage === '{}') {
+          errorMessage = 'Erro interno na API da Evolution. Verifique se o número é válido.'
         }
 
         throw new Error(errorMessage)
@@ -360,8 +369,8 @@ export default function Interacoes() {
         }
       }
 
-      if (description === '[object Object]') {
-        description = 'Erro ao enviar mensagem pela API. Formato de resposta inválido.'
+      if (description === '[object Object]' || description === '{}') {
+        description = 'Erro ao enviar mensagem pela API. O destino pode ser inválido.'
       }
 
       toast({
