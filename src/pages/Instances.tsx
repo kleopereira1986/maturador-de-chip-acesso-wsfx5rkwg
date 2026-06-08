@@ -4,7 +4,16 @@ import { WhatsappInstance } from '@/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Trash2, Smartphone, Loader2, QrCode, Settings, Webhook } from 'lucide-react'
+import {
+  Plus,
+  Trash2,
+  Smartphone,
+  Loader2,
+  QrCode,
+  Settings,
+  Webhook,
+  ShieldCheck,
+} from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -17,6 +26,7 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 export default function Instances() {
   const { profile } = useAuth()
@@ -24,15 +34,23 @@ export default function Instances() {
 
   const [instances, setInstances] = useState<WhatsappInstance[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
 
   const [qrModalOpen, setQrModalOpen] = useState(false)
   const [qrBase64, setQrBase64] = useState('')
   const [pollingInstance, setPollingInstance] = useState<string | null>(null)
-  const [isCreating, setIsCreating] = useState(false)
 
+  const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
+  const [proxyUrl, setProxyUrl] = useState('')
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editInstanceId, setEditInstanceId] = useState('')
+  const [editName, setEditName] = useState('')
+  const [editProxyUrl, setEditProxyUrl] = useState('')
 
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
   const [globalApiKey, setGlobalApiKey] = useState('')
@@ -120,6 +138,15 @@ export default function Instances() {
       return
     }
 
+    if (proxyUrl && !/^https?:\/\//.test(proxyUrl)) {
+      toast({
+        title: 'Aviso',
+        description: 'O URL do proxy deve iniciar com http:// ou https://',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsCreating(true)
     try {
       const token = generateToken()
@@ -135,6 +162,7 @@ export default function Instances() {
           instanceName: instanceNameWithoutSpaces,
           token: token,
           qrcode: true,
+          ...(proxyUrl ? { proxy: proxyUrl } : {}),
         }),
       })
 
@@ -147,10 +175,11 @@ export default function Instances() {
 
       const createData = await createRes.json()
 
-      await instancesService.createInstance(instanceNameWithoutSpaces, token)
+      await instancesService.createInstance(instanceNameWithoutSpaces, token, proxyUrl)
 
       toast({ title: 'Sucesso', description: 'Instância criada' })
       setName('')
+      setProxyUrl('')
       setIsModalOpen(false)
 
       if (createData.qrcode && createData.qrcode.base64) {
@@ -167,7 +196,37 @@ export default function Instances() {
     }
   }
 
-  const handleConnectExisting = async (instanceName: string) => {
+  const openEditModal = (instance: WhatsappInstance) => {
+    setEditInstanceId(instance.id)
+    setEditName(instance.name)
+    setEditProxyUrl(instance.proxy_url || '')
+    setIsEditModalOpen(true)
+  }
+
+  const handleEdit = async () => {
+    if (editProxyUrl && !/^https?:\/\//.test(editProxyUrl)) {
+      toast({
+        title: 'Aviso',
+        description: 'O URL do proxy deve iniciar com http:// ou https://',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsEditing(true)
+    try {
+      await instancesService.updateInstance(editInstanceId, { proxy_url: editProxyUrl })
+      toast({ title: 'Sucesso', description: 'Instância atualizada com sucesso' })
+      setIsEditModalOpen(false)
+      fetchInstances()
+    } catch (error: any) {
+      toast({ title: 'Erro', description: error.message, variant: 'destructive' })
+    } finally {
+      setIsEditing(false)
+    }
+  }
+
+  const handleConnectExisting = async (instance: WhatsappInstance) => {
     if (!urlServidor || !globalApiKey) {
       toast({
         title: 'Aviso',
@@ -178,15 +237,23 @@ export default function Instances() {
     }
     try {
       toast({ title: 'Conectando...', description: 'Solicitando QR Code...' })
-      const res = await fetch(`${urlServidor}/instance/connect/${instanceName}`, {
-        headers: { apikey: globalApiKey },
+
+      const isPost = !!instance.proxy_url
+      const res = await fetch(`${urlServidor}/instance/connect/${instance.name}`, {
+        method: isPost ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: globalApiKey,
+        },
+        ...(isPost ? { body: JSON.stringify({ proxy: instance.proxy_url }) } : {}),
       })
+
       if (!res.ok) throw new Error('Falha ao conectar')
       const data = await res.json()
 
       if (data.base64) {
         setQrBase64(data.base64)
-        setPollingInstance(instanceName)
+        setPollingInstance(instance.name)
         setQrModalOpen(true)
       } else if (data.instance?.state === 'open') {
         toast({ title: 'Aviso', description: 'Esta instância já está conectada.' })
@@ -343,7 +410,17 @@ export default function Instances() {
                 <CardTitle className="text-lg font-medium">
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-5 w-5 text-slate-500" />
-                    {instance.name}
+                    <span className="truncate max-w-[150px] sm:max-w-[200px]">{instance.name}</span>
+                    {instance.proxy_url && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Proxy Configurado</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 </CardTitle>
                 {getStatusBadge(instance.status)}
@@ -353,18 +430,28 @@ export default function Instances() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleConnectExisting(instance.name)}
+                    onClick={() => handleConnectExisting(instance)}
                   >
                     <QrCode className="mr-2 h-4 w-4" /> Conectar
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(instance.id, instance.name)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => openEditModal(instance)}
+                      className="text-slate-500 hover:text-slate-700"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(instance.id, instance.name)}
+                      className="text-red-500 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -387,6 +474,15 @@ export default function Instances() {
                 placeholder="Ex: Chip Comercial 01"
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Proxy URL (Opcional)</label>
+              <Input
+                value={proxyUrl}
+                onChange={(e) => setProxyUrl(e.target.value)}
+                placeholder="http://usuario:senha@ip:porta"
+              />
+              <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isCreating}>
@@ -394,6 +490,43 @@ export default function Instances() {
             </Button>
             <Button onClick={handleCreate} disabled={!name || isCreating}>
               {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Instância</DialogTitle>
+            <DialogDescription>Atualize as configurações da instância.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nome da Instância</label>
+              <Input value={editName} disabled className="bg-slate-100 text-slate-500" />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Proxy URL (Opcional)</label>
+              <Input
+                value={editProxyUrl}
+                onChange={(e) => setEditProxyUrl(e.target.value)}
+                placeholder="http://usuario:senha@ip:porta"
+              />
+              <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditModalOpen(false)}
+              disabled={isEditing}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleEdit} disabled={isEditing}>
+              {isEditing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Salvar
             </Button>
           </DialogFooter>

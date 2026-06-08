@@ -27,11 +27,11 @@ export const instancesService = {
     if (error) throw error
     return data as WhatsappInstance[]
   },
-  async createInstance(name: string, token: string) {
+  async createInstance(name: string, token: string, proxy_url?: string | null) {
     const { data: user } = await supabase.auth.getUser()
     const { data, error } = await supabase
       .from('whatsapp_instances')
-      .insert({ name, token, status: 'DESCONECTADO', owner_id: user.user?.id })
+      .insert({ name, token, status: 'DESCONECTADO', owner_id: user.user?.id, proxy_url })
       .select()
       .single()
     if (error) throw error
