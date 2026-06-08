@@ -13,6 +13,7 @@ import {
   Settings,
   Webhook,
   ShieldCheck,
+  Monitor,
 } from 'lucide-react'
 import {
   Dialog,
@@ -46,11 +47,13 @@ export default function Instances() {
   const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
   const [proxyUrl, setProxyUrl] = useState('')
+  const [userAgent, setUserAgent] = useState('')
 
   const [isEditing, setIsEditing] = useState(false)
   const [editInstanceId, setEditInstanceId] = useState('')
   const [editName, setEditName] = useState('')
   const [editProxyUrl, setEditProxyUrl] = useState('')
+  const [editUserAgent, setEditUserAgent] = useState('')
 
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
   const [globalApiKey, setGlobalApiKey] = useState('')
@@ -163,6 +166,7 @@ export default function Instances() {
           token: token,
           qrcode: true,
           ...(proxyUrl ? { proxy: proxyUrl } : {}),
+          ...(userAgent ? { userAgent } : {}),
         }),
       })
 
@@ -175,11 +179,12 @@ export default function Instances() {
 
       const createData = await createRes.json()
 
-      await instancesService.createInstance(instanceNameWithoutSpaces, token, proxyUrl)
+      await instancesService.createInstance(instanceNameWithoutSpaces, token, proxyUrl, userAgent)
 
       toast({ title: 'Sucesso', description: 'Instância criada' })
       setName('')
       setProxyUrl('')
+      setUserAgent('')
       setIsModalOpen(false)
 
       if (createData.qrcode && createData.qrcode.base64) {
@@ -200,6 +205,7 @@ export default function Instances() {
     setEditInstanceId(instance.id)
     setEditName(instance.name)
     setEditProxyUrl(instance.proxy_url || '')
+    setEditUserAgent(instance.user_agent || '')
     setIsEditModalOpen(true)
   }
 
@@ -215,7 +221,10 @@ export default function Instances() {
 
     setIsEditing(true)
     try {
-      await instancesService.updateInstance(editInstanceId, { proxy_url: editProxyUrl })
+      await instancesService.updateInstance(editInstanceId, {
+        proxy_url: editProxyUrl,
+        user_agent: editUserAgent,
+      })
       toast({ title: 'Sucesso', description: 'Instância atualizada com sucesso' })
       setIsEditModalOpen(false)
       fetchInstances()
@@ -238,14 +247,18 @@ export default function Instances() {
     try {
       toast({ title: 'Conectando...', description: 'Solicitando QR Code...' })
 
-      const isPost = !!instance.proxy_url
+      const isPost = !!instance.proxy_url || !!instance.user_agent
+      const payload: any = {}
+      if (instance.proxy_url) payload.proxy = instance.proxy_url
+      if (instance.user_agent) payload.userAgent = instance.user_agent
+
       const res = await fetch(`${urlServidor}/instance/connect/${instance.name}`, {
         method: isPost ? 'POST' : 'GET',
         headers: {
           'Content-Type': 'application/json',
           apikey: globalApiKey,
         },
-        ...(isPost ? { body: JSON.stringify({ proxy: instance.proxy_url }) } : {}),
+        ...(isPost ? { body: JSON.stringify(payload) } : {}),
       })
 
       if (!res.ok) throw new Error('Falha ao conectar')
@@ -421,6 +434,20 @@ export default function Instances() {
                         </TooltipContent>
                       </Tooltip>
                     )}
+                    {instance.user_agent && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Monitor className="h-4 w-4 text-blue-500 flex-shrink-0 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            User-Agent Configurado:
+                            <br />
+                            {instance.user_agent}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </div>
                 </CardTitle>
                 {getStatusBadge(instance.status)}
@@ -483,6 +510,17 @@ export default function Instances() {
               />
               <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">User-Agent (Opcional)</label>
+              <Input
+                value={userAgent}
+                onChange={(e) => setUserAgent(e.target.value)}
+                placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              />
+              <p className="text-xs text-slate-500">
+                Mascara a automação fingindo ser um navegador comercial.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={isCreating}>
@@ -515,6 +553,17 @@ export default function Instances() {
                 placeholder="http://usuario:senha@ip:porta"
               />
               <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">User-Agent (Opcional)</label>
+              <Input
+                value={editUserAgent}
+                onChange={(e) => setEditUserAgent(e.target.value)}
+                placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+              />
+              <p className="text-xs text-slate-500">
+                Mascara a automação fingindo ser um navegador comercial.
+              </p>
             </div>
           </div>
           <DialogFooter>

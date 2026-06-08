@@ -20,6 +20,7 @@ export type WhatsappInstance = {
   is_maturador_active: boolean
   owner_id: string
   proxy_url?: string | null
+  user_agent?: string | null
   created_at: string
   updated_at: string
 }

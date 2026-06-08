@@ -255,6 +255,7 @@ export type Database = {
           is_maturador_active: boolean
           name: string
           owner_id: string | null
+          proxy_url: string | null
           status: string
           token: string
           updated_at: string
@@ -265,6 +266,7 @@ export type Database = {
           is_maturador_active?: boolean
           name: string
           owner_id?: string | null
+          proxy_url?: string | null
           status?: string
           token: string
           updated_at?: string
@@ -275,6 +277,7 @@ export type Database = {
           is_maturador_active?: boolean
           name?: string
           owner_id?: string | null
+          proxy_url?: string | null
           status?: string
           token?: string
           updated_at?: string
@@ -589,6 +592,7 @@ export const Constants = {
 //   created_at: timestamp with time zone (not null, default: now())
 //   updated_at: timestamp with time zone (not null, default: now())
 //   is_maturador_active: boolean (not null, default: false)
+//   proxy_url: text (nullable)
 // Table: whatsapp_messages
 //   id: uuid (not null, default: gen_random_uuid())
 //   instance_id: uuid (not null)
