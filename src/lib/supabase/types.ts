@@ -259,6 +259,7 @@ export type Database = {
           status: string
           token: string
           updated_at: string
+          user_agent: string | null
         }
         Insert: {
           created_at?: string
@@ -270,6 +271,7 @@ export type Database = {
           status?: string
           token: string
           updated_at?: string
+          user_agent?: string | null
         }
         Update: {
           created_at?: string
@@ -281,6 +283,7 @@ export type Database = {
           status?: string
           token?: string
           updated_at?: string
+          user_agent?: string | null
         }
         Relationships: [
           {
@@ -593,6 +596,7 @@ export const Constants = {
 //   updated_at: timestamp with time zone (not null, default: now())
 //   is_maturador_active: boolean (not null, default: false)
 //   proxy_url: text (nullable)
+//   user_agent: text (nullable)
 // Table: whatsapp_messages
 //   id: uuid (not null, default: gen_random_uuid())
 //   instance_id: uuid (not null)

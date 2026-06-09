@@ -14,6 +14,8 @@ import {
   Webhook,
   ShieldCheck,
   Monitor,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import {
   Dialog,
@@ -24,10 +26,18 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { USER_AGENT_PRESETS, buildProxyString } from '@/lib/constants'
 
 export default function Instances() {
   const { profile } = useAuth()
@@ -46,13 +56,21 @@ export default function Instances() {
 
   const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
-  const [proxyUrl, setProxyUrl] = useState('')
+  const [proxyHost, setProxyHost] = useState('')
+  const [proxyPort, setProxyPort] = useState('')
+  const [proxyUser, setProxyUser] = useState('')
+  const [proxyPassword, setProxyPassword] = useState('')
+  const [showProxyPassword, setShowProxyPassword] = useState(false)
   const [userAgent, setUserAgent] = useState('')
 
   const [isEditing, setIsEditing] = useState(false)
   const [editInstanceId, setEditInstanceId] = useState('')
   const [editName, setEditName] = useState('')
-  const [editProxyUrl, setEditProxyUrl] = useState('')
+  const [editProxyHost, setEditProxyHost] = useState('')
+  const [editProxyPort, setEditProxyPort] = useState('')
+  const [editProxyUser, setEditProxyUser] = useState('')
+  const [editProxyPassword, setEditProxyPassword] = useState('')
+  const [showEditProxyPassword, setShowEditProxyPassword] = useState(false)
   const [editUserAgent, setEditUserAgent] = useState('')
 
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
@@ -141,10 +159,10 @@ export default function Instances() {
       return
     }
 
-    if (proxyUrl && !/^https?:\/\//.test(proxyUrl)) {
+    if ((proxyHost || proxyPort || proxyUser || proxyPassword) && (!proxyHost || !proxyPort)) {
       toast({
         title: 'Aviso',
-        description: 'O URL do proxy deve iniciar com http:// ou https://',
+        description: 'Se for utilizar proxy, os campos Host e Porta são obrigatórios.',
         variant: 'destructive',
       })
       return
@@ -154,18 +172,16 @@ export default function Instances() {
     try {
       const token = generateToken()
       const instanceNameWithoutSpaces = name.replace(/\s+/g, '-')
+      const constructedProxyUrl = buildProxyString(proxyHost, proxyPort, proxyUser, proxyPassword)
 
       const createRes = await fetch(`${urlServidor}/instance/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: globalApiKey,
-        },
+        headers: { 'Content-Type': 'application/json', apikey: globalApiKey },
         body: JSON.stringify({
           instanceName: instanceNameWithoutSpaces,
           token: token,
           qrcode: true,
-          ...(proxyUrl ? { proxy: proxyUrl } : {}),
+          ...(constructedProxyUrl ? { proxy: constructedProxyUrl } : {}),
           ...(userAgent ? { userAgent } : {}),
         }),
       })
@@ -179,11 +195,20 @@ export default function Instances() {
 
       const createData = await createRes.json()
 
-      await instancesService.createInstance(instanceNameWithoutSpaces, token, proxyUrl, userAgent)
+      await instancesService.createInstance(instanceNameWithoutSpaces, token, {
+        proxy_host: proxyHost,
+        proxy_port: proxyPort,
+        proxy_user: proxyUser,
+        proxy_password: proxyPassword,
+        user_agent: userAgent,
+      })
 
       toast({ title: 'Sucesso', description: 'Instância criada' })
       setName('')
-      setProxyUrl('')
+      setProxyHost('')
+      setProxyPort('')
+      setProxyUser('')
+      setProxyPassword('')
       setUserAgent('')
       setIsModalOpen(false)
 
@@ -204,16 +229,22 @@ export default function Instances() {
   const openEditModal = (instance: WhatsappInstance) => {
     setEditInstanceId(instance.id)
     setEditName(instance.name)
-    setEditProxyUrl(instance.proxy_url || '')
+    setEditProxyHost(instance.proxy_host || '')
+    setEditProxyPort(instance.proxy_port || '')
+    setEditProxyUser(instance.proxy_user || '')
+    setEditProxyPassword(instance.proxy_password || '')
     setEditUserAgent(instance.user_agent || '')
     setIsEditModalOpen(true)
   }
 
   const handleEdit = async () => {
-    if (editProxyUrl && !/^https?:\/\//.test(editProxyUrl)) {
+    if (
+      (editProxyHost || editProxyPort || editProxyUser || editProxyPassword) &&
+      (!editProxyHost || !editProxyPort)
+    ) {
       toast({
         title: 'Aviso',
-        description: 'O URL do proxy deve iniciar com http:// ou https://',
+        description: 'Se for utilizar proxy, os campos Host e Porta são obrigatórios.',
         variant: 'destructive',
       })
       return
@@ -222,7 +253,10 @@ export default function Instances() {
     setIsEditing(true)
     try {
       await instancesService.updateInstance(editInstanceId, {
-        proxy_url: editProxyUrl,
+        proxy_host: editProxyHost,
+        proxy_port: editProxyPort,
+        proxy_user: editProxyUser,
+        proxy_password: editProxyPassword,
         user_agent: editUserAgent,
       })
       toast({ title: 'Sucesso', description: 'Instância atualizada com sucesso' })
@@ -247,17 +281,21 @@ export default function Instances() {
     try {
       toast({ title: 'Conectando...', description: 'Solicitando QR Code...' })
 
-      const isPost = !!instance.proxy_url || !!instance.user_agent
+      const constructedProxyUrl =
+        buildProxyString(
+          instance.proxy_host,
+          instance.proxy_port,
+          instance.proxy_user,
+          instance.proxy_password,
+        ) || instance.proxy_url
+      const isPost = !!constructedProxyUrl || !!instance.user_agent
       const payload: any = {}
-      if (instance.proxy_url) payload.proxy = instance.proxy_url
+      if (constructedProxyUrl) payload.proxy = constructedProxyUrl
       if (instance.user_agent) payload.userAgent = instance.user_agent
 
       const res = await fetch(`${urlServidor}/instance/connect/${instance.name}`, {
         method: isPost ? 'POST' : 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: globalApiKey,
-        },
+        headers: { 'Content-Type': 'application/json', apikey: globalApiKey },
         ...(isPost ? { body: JSON.stringify(payload) } : {}),
       })
 
@@ -290,7 +328,6 @@ export default function Instances() {
           headers: { apikey: globalApiKey },
         }).catch(() => null)
       }
-
       await instancesService.deleteInstance(id)
       fetchInstances()
     } catch {
@@ -311,7 +348,6 @@ export default function Instances() {
     setIsConfiguringWebhooks(true)
     let successCount = 0
     let errorCount = 0
-
     for (const instance of instances) {
       try {
         await instancesService.configureWebhook(urlServidor, globalApiKey, instance.name)
@@ -325,9 +361,7 @@ export default function Instances() {
         })
       }
     }
-
     setIsConfiguringWebhooks(false)
-
     if (successCount > 0) {
       toast({
         title: 'Concluído',
@@ -340,10 +374,7 @@ export default function Instances() {
     setIsSyncing(true)
     try {
       const res = await instancesService.syncInstances(urlServidor, globalApiKey)
-      toast({
-        title: 'Sucesso',
-        description: res.message || 'Conexão estabelecida e instâncias sincronizadas com sucesso!',
-      })
+      toast({ title: 'Sucesso', description: res.message || 'Sincronizadas com sucesso!' })
       setIsConfigModalOpen(false)
       fetchInstances()
     } catch (error: any) {
@@ -424,13 +455,16 @@ export default function Instances() {
                   <div className="flex items-center gap-2">
                     <Smartphone className="h-5 w-5 text-slate-500" />
                     <span className="truncate max-w-[150px] sm:max-w-[200px]">{instance.name}</span>
-                    {instance.proxy_url && (
+                    {(instance.proxy_host || instance.proxy_url) && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Proxy Configurado</p>
+                          <p>
+                            Proxy Configurado:{' '}
+                            {instance.proxy_host || instance.proxy_url || 'Personalizado'}
+                          </p>
                         </TooltipContent>
                       </Tooltip>
                     )}
@@ -486,13 +520,16 @@ export default function Instances() {
         )}
       </div>
 
+      {/* Creation Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Nova Instância</DialogTitle>
-            <DialogDescription>Digite um nome para criar a nova instância.</DialogDescription>
+            <DialogDescription>
+              Configure os detalhes para criar uma nova conexão.
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
             <div className="space-y-2">
               <label className="text-sm font-medium">Nome da Instância</label>
               <Input
@@ -501,21 +538,85 @@ export default function Instances() {
                 placeholder="Ex: Chip Comercial 01"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Proxy URL (Opcional)</label>
-              <Input
-                value={proxyUrl}
-                onChange={(e) => setProxyUrl(e.target.value)}
-                placeholder="http://usuario:senha@ip:porta"
-              />
-              <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
+
+            <div className="p-4 border rounded-md bg-slate-50 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Host (Proxy)</label>
+                  <Input
+                    value={proxyHost}
+                    onChange={(e) => setProxyHost(e.target.value)}
+                    placeholder="proxy.exemplo.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Porta</label>
+                  <Input
+                    value={proxyPort}
+                    onChange={(e) => setProxyPort(e.target.value)}
+                    placeholder="8080"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Usuário Proxy</label>
+                  <Input
+                    value={proxyUser}
+                    onChange={(e) => setProxyUser(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Senha Proxy</label>
+                  <div className="relative">
+                    <Input
+                      type={showProxyPassword ? 'text' : 'password'}
+                      value={proxyPassword}
+                      onChange={(e) => setProxyPassword(e.target.value)}
+                      placeholder="Opcional"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowProxyPassword(!showProxyPassword)}
+                    >
+                      {showProxyPassword ? (
+                        <EyeOff className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-slate-500" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Útil para rotear tráfego e evitar bloqueios. Host e Porta são obrigatórios se
+                utilizar proxy.
+              </p>
             </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">User-Agent (Opcional)</label>
+              <Select onValueChange={(val) => setUserAgent(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher preset de navegador..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {USER_AGENT_PRESETS.map((p) => (
+                    <SelectItem key={p.label} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 value={userAgent}
                 onChange={(e) => setUserAgent(e.target.value)}
-                placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                placeholder="Mozilla/5.0..."
+                className="mt-2"
               />
               <p className="text-xs text-slate-500">
                 Mascara a automação fingindo ser um navegador comercial.
@@ -527,43 +628,100 @@ export default function Instances() {
               Cancelar
             </Button>
             <Button onClick={handleCreate} disabled={!name || isCreating}>
-              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Salvar
+              {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Editar Instância</DialogTitle>
             <DialogDescription>Atualize as configurações da instância.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto px-1">
             <div className="space-y-2">
               <label className="text-sm font-medium">Nome da Instância</label>
               <Input value={editName} disabled className="bg-slate-100 text-slate-500" />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Proxy URL (Opcional)</label>
-              <Input
-                value={editProxyUrl}
-                onChange={(e) => setEditProxyUrl(e.target.value)}
-                placeholder="http://usuario:senha@ip:porta"
-              />
-              <p className="text-xs text-slate-500">Útil para rotear tráfego e evitar bloqueios.</p>
+
+            <div className="p-4 border rounded-md bg-slate-50 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Host (Proxy)</label>
+                  <Input
+                    value={editProxyHost}
+                    onChange={(e) => setEditProxyHost(e.target.value)}
+                    placeholder="proxy.exemplo.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Porta</label>
+                  <Input
+                    value={editProxyPort}
+                    onChange={(e) => setEditProxyPort(e.target.value)}
+                    placeholder="8080"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Usuário Proxy</label>
+                  <Input
+                    value={editProxyUser}
+                    onChange={(e) => setEditProxyUser(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Senha Proxy</label>
+                  <div className="relative">
+                    <Input
+                      type={showEditProxyPassword ? 'text' : 'password'}
+                      value={editProxyPassword}
+                      onChange={(e) => setEditProxyPassword(e.target.value)}
+                      placeholder="Opcional"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowEditProxyPassword(!showEditProxyPassword)}
+                    >
+                      {showEditProxyPassword ? (
+                        <EyeOff className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-slate-500" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">User-Agent (Opcional)</label>
+              <Select onValueChange={(val) => setEditUserAgent(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher preset..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {USER_AGENT_PRESETS.map((p) => (
+                    <SelectItem key={p.label} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 value={editUserAgent}
                 onChange={(e) => setEditUserAgent(e.target.value)}
-                placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                placeholder="Mozilla/5.0..."
+                className="mt-2"
               />
-              <p className="text-xs text-slate-500">
-                Mascara a automação fingindo ser um navegador comercial.
-              </p>
             </div>
           </div>
           <DialogFooter>
@@ -575,8 +733,7 @@ export default function Instances() {
               Cancelar
             </Button>
             <Button onClick={handleEdit} disabled={isEditing}>
-              {isEditing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Salvar
+              {isEditing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -597,7 +754,7 @@ export default function Instances() {
                 src={
                   qrBase64.startsWith('data:image') ? qrBase64 : `data:image/png;base64,${qrBase64}`
                 }
-                alt="QR Code do WhatsApp"
+                alt="QR"
                 className="w-64 h-64 rounded-md border p-2"
               />
             ) : (
@@ -606,8 +763,7 @@ export default function Instances() {
               </div>
             )}
             <div className="flex items-center text-sm text-slate-500 gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Aguardando leitura do QR Code...
+              <Loader2 className="h-4 w-4 animate-spin" /> Aguardando leitura...
             </div>
           </div>
           <DialogFooter className="sm:justify-start">
@@ -661,8 +817,8 @@ export default function Instances() {
               Cancelar
             </Button>
             <Button onClick={handleSync} disabled={!urlServidor || !globalApiKey || isSyncing}>
-              {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Salvar e Sincronizar
+              {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Salvar e
+              Sincronizar
             </Button>
           </DialogFooter>
         </DialogContent>

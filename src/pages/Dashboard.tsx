@@ -11,6 +11,8 @@ import {
   Edit,
   Smartphone,
   Activity,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +26,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { usersService } from '@/services/users'
 import { campaignsService } from '@/services/campaigns'
 import { instancesService } from '@/services/instances'
@@ -32,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase/client'
 import { useToast } from '@/hooks/use-toast'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { USER_AGENT_PRESETS } from '@/lib/constants'
 
 export default function Dashboard() {
   const { profile } = useAuth()
@@ -48,6 +58,12 @@ export default function Dashboard() {
   const [isCreateInstOpen, setIsCreateInstOpen] = useState(false)
   const [newInstName, setNewInstName] = useState('')
   const [newInstToken, setNewInstToken] = useState('')
+  const [newInstProxyHost, setNewInstProxyHost] = useState('')
+  const [newInstProxyPort, setNewInstProxyPort] = useState('')
+  const [newInstProxyUser, setNewInstProxyUser] = useState('')
+  const [newInstProxyPassword, setNewInstProxyPassword] = useState('')
+  const [showNewInstProxyPassword, setShowNewInstProxyPassword] = useState(false)
+  const [newInstUserAgent, setNewInstUserAgent] = useState('')
   const [isCreatingInst, setIsCreatingInst] = useState(false)
 
   const loadDashboardData = async () => {
@@ -158,13 +174,37 @@ export default function Dashboard() {
 
   const handleCreateInstance = async () => {
     if (!newInstName || !newInstToken) return
+
+    if (
+      (newInstProxyHost || newInstProxyPort || newInstProxyUser || newInstProxyPassword) &&
+      (!newInstProxyHost || !newInstProxyPort)
+    ) {
+      toast({
+        title: 'Aviso',
+        description: 'Se for utilizar proxy, os campos Host e Porta são obrigatórios.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     setIsCreatingInst(true)
     try {
-      await instancesService.createInstance(newInstName, newInstToken)
+      await instancesService.createInstance(newInstName, newInstToken, {
+        proxy_host: newInstProxyHost,
+        proxy_port: newInstProxyPort,
+        proxy_user: newInstProxyUser,
+        proxy_password: newInstProxyPassword,
+        user_agent: newInstUserAgent,
+      })
       toast({ title: 'Sucesso', description: 'Instância criada com sucesso.' })
       setIsCreateInstOpen(false)
       setNewInstName('')
       setNewInstToken('')
+      setNewInstProxyHost('')
+      setNewInstProxyPort('')
+      setNewInstProxyUser('')
+      setNewInstProxyPassword('')
+      setNewInstUserAgent('')
       loadDashboardData()
     } catch (e: any) {
       toast({
@@ -430,11 +470,11 @@ export default function Dashboard() {
       )}
 
       <Dialog open={isCreateInstOpen} onOpenChange={setIsCreateInstOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Nova Instância</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
             <div className="space-y-2">
               <Label>Nome da Instância</Label>
               <Input
@@ -450,6 +490,83 @@ export default function Dashboard() {
                 onChange={(e) => setNewInstToken(e.target.value)}
                 placeholder="Ex: token123"
                 type="password"
+              />
+            </div>
+
+            <div className="p-4 border rounded-md bg-slate-50 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Host (Proxy)</Label>
+                  <Input
+                    value={newInstProxyHost}
+                    onChange={(e) => setNewInstProxyHost(e.target.value)}
+                    placeholder="proxy.exemplo.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Porta</Label>
+                  <Input
+                    value={newInstProxyPort}
+                    onChange={(e) => setNewInstProxyPort(e.target.value)}
+                    placeholder="8080"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Usuário Proxy</Label>
+                  <Input
+                    value={newInstProxyUser}
+                    onChange={(e) => setNewInstProxyUser(e.target.value)}
+                    placeholder="Opcional"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Senha Proxy</Label>
+                  <div className="relative">
+                    <Input
+                      type={showNewInstProxyPassword ? 'text' : 'password'}
+                      value={newInstProxyPassword}
+                      onChange={(e) => setNewInstProxyPassword(e.target.value)}
+                      placeholder="Opcional"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowNewInstProxyPassword(!showNewInstProxyPassword)}
+                    >
+                      {showNewInstProxyPassword ? (
+                        <EyeOff className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-slate-500" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>User-Agent (Opcional)</Label>
+              <Select onValueChange={(val) => setNewInstUserAgent(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolher preset..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {USER_AGENT_PRESETS.map((p) => (
+                    <SelectItem key={p.label} value={p.value}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                value={newInstUserAgent}
+                onChange={(e) => setNewInstUserAgent(e.target.value)}
+                placeholder="Mozilla/5.0..."
+                className="mt-2"
               />
             </div>
           </div>

@@ -30,8 +30,13 @@ export const instancesService = {
   async createInstance(
     name: string,
     token: string,
-    proxy_url?: string | null,
-    user_agent?: string | null,
+    options?: {
+      proxy_host?: string | null
+      proxy_port?: string | null
+      proxy_user?: string | null
+      proxy_password?: string | null
+      user_agent?: string | null
+    },
   ) {
     const { data: user } = await supabase.auth.getUser()
     const { data, error } = await supabase
@@ -41,8 +46,11 @@ export const instancesService = {
         token,
         status: 'DESCONECTADO',
         owner_id: user.user?.id,
-        proxy_url,
-        user_agent,
+        proxy_host: options?.proxy_host,
+        proxy_port: options?.proxy_port,
+        proxy_user: options?.proxy_user,
+        proxy_password: options?.proxy_password,
+        user_agent: options?.user_agent,
       })
       .select()
       .single()
