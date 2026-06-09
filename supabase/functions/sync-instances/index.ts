@@ -67,7 +67,12 @@ Deno.serve(async (req) => {
     }
 
     if (!fetchRes.ok) {
-      return new Response(JSON.stringify({ error: `API retornou erro ${fetchRes.status}` }), {
+      let errorMsg = `API retornou erro ${fetchRes.status}`
+      try {
+        const errData = await fetchRes.json()
+        errorMsg = errData?.response?.message?.[0] || errData?.message || errData?.error || errorMsg
+      } catch (e) {}
+      return new Response(JSON.stringify({ error: errorMsg }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -112,14 +117,19 @@ Deno.serve(async (req) => {
 
       if (!instanceName) continue
 
+      const updatePayload: any = {
+        token: token,
+        status: finalStatus,
+        updated_at: new Date().toISOString(),
+      }
+      if (finalStatus === 'CONECTADO') {
+        updatePayload.last_error = null
+      }
+
       if (existingMap.has(instanceName)) {
         await supabase
           .from('whatsapp_instances')
-          .update({
-            token: token,
-            status: finalStatus,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updatePayload)
           .eq('id', existingMap.get(instanceName))
       } else {
         await supabase.from('whatsapp_instances').insert({

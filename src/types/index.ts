@@ -25,6 +25,7 @@ export type WhatsappInstance = {
   proxy_user?: string | null
   proxy_password?: string | null
   user_agent?: string | null
+  last_error?: string | null
   created_at: string
   updated_at: string
 }

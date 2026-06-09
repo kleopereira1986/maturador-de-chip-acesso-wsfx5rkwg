@@ -18,6 +18,7 @@ import {
   EyeOff,
   Network,
   Clock,
+  AlertCircle,
 } from 'lucide-react'
 import {
   Dialog,
@@ -177,7 +178,9 @@ export default function Instances() {
       })
 
       if (error || data?.error) {
-        throw new Error(data?.error || error?.message || 'Falha na conexão com o proxy')
+        const errorMsg = data?.error || error?.message || 'Falha na conexão com o proxy'
+        const errorCode = data?.code ? ` [${data.code}]` : ''
+        throw new Error(`${errorMsg}${errorCode}`)
       }
 
       if (data?.success) {
@@ -234,7 +237,10 @@ export default function Instances() {
       if (!createRes.ok) {
         const errData = await createRes.json().catch(() => null)
         throw new Error(
-          errData?.response?.message?.[0] || 'Falha ao criar instância na API Evolution',
+          errData?.response?.message?.[0] ||
+            errData?.message ||
+            errData?.error ||
+            'Falha ao criar instância na API Evolution',
         )
       }
 
@@ -344,39 +350,73 @@ export default function Instances() {
         ...(isPost ? { body: JSON.stringify(payload) } : {}),
       })
 
-      if (!res.ok) throw new Error('Falha ao conectar')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        const specificError =
+          errData?.response?.message?.[0] ||
+          errData?.message ||
+          errData?.error ||
+          'Falha ao conectar'
+        throw new Error(specificError)
+      }
+
       const data = await res.json()
 
       if (data.base64) {
         setQrBase64(data.base64)
         setPollingInstance(instance.name)
         setQrModalOpen(true)
+        await instancesService.updateInstance(instance.id, { last_error: null })
       } else if (data.instance?.state === 'open') {
         toast({ title: 'Aviso', description: 'Esta instância já está conectada.' })
+        await instancesService.updateInstance(instance.id, { last_error: null })
       } else {
         throw new Error('QR Code não retornado pela API.')
       }
+
+      fetchInstances()
     } catch (e: any) {
+      const errorMsg = e.message || 'Servidor Evolution API inacessível.'
       toast({
         title: 'Erro na API WhatsApp',
-        description: e.message || 'Servidor Evolution API inacessível.',
+        description: errorMsg,
         variant: 'destructive',
       })
+      await instancesService
+        .updateInstance(instance.id, { last_error: errorMsg, status: 'DESCONECTADO' })
+        .catch(() => null)
+      fetchInstances()
     }
   }
 
   const handleDelete = async (id: string, instanceName: string) => {
     try {
       if (urlServidor && globalApiKey) {
-        await fetch(`${urlServidor}/instance/delete/${instanceName}`, {
+        const res = await fetch(`${urlServidor}/instance/delete/${instanceName}`, {
           method: 'DELETE',
           headers: { apikey: globalApiKey },
-        }).catch(() => null)
+        })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null)
+          const specificError =
+            errData?.response?.message?.[0] || errData?.message || errData?.error
+          if (specificError) {
+            toast({
+              title: 'Aviso Evolution API',
+              description: specificError,
+              variant: 'destructive',
+            })
+          }
+        }
       }
       await instancesService.deleteInstance(id)
       fetchInstances()
-    } catch {
-      toast({ title: 'Erro', description: 'Erro ao excluir instância', variant: 'destructive' })
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Erro ao excluir instância',
+        variant: 'destructive',
+      })
     }
   }
 
@@ -424,7 +464,7 @@ export default function Instances() {
       fetchInstances()
     } catch (error: any) {
       toast({
-        title: 'Erro',
+        title: 'Erro de Sincronização',
         description: error.message || 'Erro ao sincronizar',
         variant: 'destructive',
       })
@@ -538,6 +578,16 @@ export default function Instances() {
                   Última Sincronização:{' '}
                   {format(new Date(instance.updated_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                 </div>
+                {instance.last_error &&
+                  (instance.status === 'DESCONECTADO' || instance.status === 'PAUSADO') && (
+                    <div className="mb-4 text-xs text-red-600 bg-red-50 p-2 rounded-md border border-red-100 flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div className="break-all">
+                        <span className="font-semibold block mb-0.5">Último Erro:</span>
+                        {instance.last_error}
+                      </div>
+                    </div>
+                  )}
                 <div className="flex justify-between items-center mt-4">
                   <Button
                     variant="outline"

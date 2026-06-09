@@ -48,16 +48,26 @@ Deno.serve(async (req) => {
   } catch (error: any) {
     console.error('Proxy test error:', error)
     let errorMessage = error.message || 'Falha na Autenticação ou Host Inalcançável'
+    let errorCode = 'UNKNOWN_ERROR'
 
-    if (errorMessage.includes('timeout')) {
-      errorMessage = 'Tempo limite esgotado. Host Inalcançável.'
-    } else if (errorMessage.includes('407')) {
-      errorMessage = 'Falha na Autenticação do Proxy (407).'
-    } else if (errorMessage.includes('ECONNREFUSED')) {
-      errorMessage = 'Conexão Recusada. Verifique o Host e a Porta.'
+    if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+      errorMessage = 'Não foi possível alcançar o Host do Proxy.'
+      errorCode = 'HOST_ERROR'
+    } else if (
+      errorMessage.includes('407') ||
+      errorMessage.includes('Proxy Authentication Required')
+    ) {
+      errorMessage = 'Usuário ou Senha do Proxy incorretos.'
+      errorCode = 'AUTH_ERROR'
+    } else if (errorMessage.includes('ECONNREFUSED') || errorMessage.includes('ENOTFOUND')) {
+      errorMessage = 'Não foi possível alcançar o Host do Proxy.'
+      errorCode = 'HOST_ERROR'
+    } else {
+      errorMessage = 'A Evolution API não respondeu através deste Proxy.'
+      errorCode = 'API_ERROR'
     }
 
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: errorMessage, code: errorCode }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

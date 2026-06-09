@@ -200,16 +200,30 @@ Deno.serve(async (req) => {
     if (event === 'connection.update' || event === 'connection_update') {
       const instanceName = body.instance
       const state = body.data?.state
+      const statusReason = body.data?.statusReason || body.data?.reason || null
 
       let newStatus = 'CONECTANDO'
-      if (state === 'open') newStatus = 'CONECTADO'
-      else if (state === 'close') newStatus = 'DESCONECTADO'
+      const updatePayload: any = { updated_at: new Date().toISOString() }
+
+      if (state === 'open') {
+        newStatus = 'CONECTADO'
+        updatePayload.last_error = null
+      } else if (state === 'close') {
+        newStatus = 'DESCONECTADO'
+        if (statusReason && statusReason !== 428) {
+          let reasonText = `Conexão fechada. Código: ${statusReason}`
+          if (statusReason === 401) reasonText = 'Desconectado: Aparelho deslogado (401)'
+          else if (statusReason === 408) reasonText = 'Desconectado: Timeout de conexão (408)'
+          else if (statusReason === 440) reasonText = 'Desconectado: Conflito de sessão (440)'
+          else if (statusReason === 500) reasonText = 'Desconectado: Erro interno do servidor (500)'
+          updatePayload.last_error = reasonText
+        }
+      }
+
+      updatePayload.status = newStatus
 
       if (instanceName) {
-        await supabase
-          .from('whatsapp_instances')
-          .update({ status: newStatus, updated_at: new Date().toISOString() })
-          .eq('name', instanceName)
+        await supabase.from('whatsapp_instances').update(updatePayload).eq('name', instanceName)
       }
     }
 
