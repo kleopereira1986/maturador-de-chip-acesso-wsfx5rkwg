@@ -255,7 +255,11 @@ export type Database = {
           is_maturador_active: boolean
           name: string
           owner_id: string | null
+          proxy_host: string | null
+          proxy_password: string | null
+          proxy_port: string | null
           proxy_url: string | null
+          proxy_user: string | null
           status: string
           token: string
           updated_at: string
@@ -267,7 +271,11 @@ export type Database = {
           is_maturador_active?: boolean
           name: string
           owner_id?: string | null
+          proxy_host?: string | null
+          proxy_password?: string | null
+          proxy_port?: string | null
           proxy_url?: string | null
+          proxy_user?: string | null
           status?: string
           token: string
           updated_at?: string
@@ -279,7 +287,11 @@ export type Database = {
           is_maturador_active?: boolean
           name?: string
           owner_id?: string | null
+          proxy_host?: string | null
+          proxy_password?: string | null
+          proxy_port?: string | null
           proxy_url?: string | null
+          proxy_user?: string | null
           status?: string
           token?: string
           updated_at?: string
@@ -597,6 +609,10 @@ export const Constants = {
 //   is_maturador_active: boolean (not null, default: false)
 //   proxy_url: text (nullable)
 //   user_agent: text (nullable)
+//   proxy_host: text (nullable)
+//   proxy_port: text (nullable)
+//   proxy_user: text (nullable)
+//   proxy_password: text (nullable)
 // Table: whatsapp_messages
 //   id: uuid (not null, default: gen_random_uuid())
 //   instance_id: uuid (not null)

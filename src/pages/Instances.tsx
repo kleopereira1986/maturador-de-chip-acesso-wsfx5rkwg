@@ -16,6 +16,8 @@ import {
   Monitor,
   Eye,
   EyeOff,
+  Network,
+  Clock,
 } from 'lucide-react'
 import {
   Dialog,
@@ -38,6 +40,8 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { USER_AGENT_PRESETS, buildProxyString } from '@/lib/constants'
+import { format } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 export default function Instances() {
   const { profile } = useAuth()
@@ -72,6 +76,8 @@ export default function Instances() {
   const [editProxyPassword, setEditProxyPassword] = useState('')
   const [showEditProxyPassword, setShowEditProxyPassword] = useState(false)
   const [editUserAgent, setEditUserAgent] = useState('')
+
+  const [isTestingProxy, setIsTestingProxy] = useState(false)
 
   const [urlServidor, setUrlServidor] = useState('https://api.primaziainvestimentos.com')
   const [globalApiKey, setGlobalApiKey] = useState('')
@@ -148,6 +154,45 @@ export default function Instances() {
 
   const generateToken = () =>
     Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+
+  const testProxyConnection = async (isEdit = false) => {
+    const h = isEdit ? editProxyHost : proxyHost
+    const p = isEdit ? editProxyPort : proxyPort
+    const u = isEdit ? editProxyUser : proxyUser
+    const pw = isEdit ? editProxyPassword : proxyPassword
+
+    if (!h || !p) {
+      toast({
+        title: 'Aviso',
+        description: 'Host e Porta são obrigatórios para testar.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsTestingProxy(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('test-proxy', {
+        body: { host: h, port: p, username: u, password: pw },
+      })
+
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || 'Falha na conexão com o proxy')
+      }
+
+      if (data?.success) {
+        toast({
+          title: 'Proxy Conectado com Sucesso!',
+          description: `Seu proxy está ativo e mascarando a conexão. IP Público: ${data.ip}`,
+          variant: 'default',
+        })
+      }
+    } catch (err: any) {
+      toast({ title: 'Erro ao testar proxy', description: err.message, variant: 'destructive' })
+    } finally {
+      setIsTestingProxy(false)
+    }
+  }
 
   const handleCreate = async () => {
     if (!urlServidor || !globalApiKey) {
@@ -461,9 +506,11 @@ export default function Instances() {
                           <ShieldCheck className="h-4 w-4 text-emerald-500 flex-shrink-0 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>
-                            Proxy Configurado:{' '}
-                            {instance.proxy_host || instance.proxy_url || 'Personalizado'}
+                          <p>Proxy Ativo</p>
+                          <p className="font-mono text-xs text-slate-300 mt-1">
+                            {instance.proxy_host
+                              ? `${instance.proxy_host}:${instance.proxy_port}`
+                              : instance.proxy_url}
                           </p>
                         </TooltipContent>
                       </Tooltip>
@@ -474,9 +521,8 @@ export default function Instances() {
                           <Monitor className="h-4 w-4 text-blue-500 flex-shrink-0 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>
-                            User-Agent Configurado:
-                            <br />
+                          <p>User-Agent Configurado</p>
+                          <p className="font-mono text-xs text-slate-300 mt-1 max-w-[200px] break-all">
                             {instance.user_agent}
                           </p>
                         </TooltipContent>
@@ -487,6 +533,11 @@ export default function Instances() {
                 {getStatusBadge(instance.status)}
               </CardHeader>
               <CardContent>
+                <div className="text-xs text-slate-500 mb-4 flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  Última Sincronização:{' '}
+                  {format(new Date(instance.updated_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                </div>
                 <div className="flex justify-between items-center mt-4">
                   <Button
                     variant="outline"
@@ -540,9 +591,27 @@ export default function Instances() {
             </div>
 
             <div className="p-4 border rounded-md bg-slate-50 space-y-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-semibold">Configurações de Proxy</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => testProxyConnection(false)}
+                  disabled={isTestingProxy || !proxyHost || !proxyPort}
+                  className="h-8"
+                >
+                  {isTestingProxy ? (
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Network className="mr-2 h-3 w-3" />
+                  )}
+                  Testar Conexão
+                </Button>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Host (Proxy)</label>
+                  <label className="text-sm font-medium">Host</label>
                   <Input
                     value={proxyHost}
                     onChange={(e) => setProxyHost(e.target.value)}
@@ -560,7 +629,7 @@ export default function Instances() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Usuário Proxy</label>
+                  <label className="text-sm font-medium">Usuário (Opcional)</label>
                   <Input
                     value={proxyUser}
                     onChange={(e) => setProxyUser(e.target.value)}
@@ -568,7 +637,7 @@ export default function Instances() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Senha Proxy</label>
+                  <label className="text-sm font-medium">Senha (Opcional)</label>
                   <div className="relative">
                     <Input
                       type={showProxyPassword ? 'text' : 'password'}
@@ -648,9 +717,27 @@ export default function Instances() {
             </div>
 
             <div className="p-4 border rounded-md bg-slate-50 space-y-4">
+              <div className="flex justify-between items-center">
+                <p className="text-sm font-semibold">Configurações de Proxy</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => testProxyConnection(true)}
+                  disabled={isTestingProxy || !editProxyHost || !editProxyPort}
+                  className="h-8"
+                >
+                  {isTestingProxy ? (
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Network className="mr-2 h-3 w-3" />
+                  )}
+                  Testar Conexão
+                </Button>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Host (Proxy)</label>
+                  <label className="text-sm font-medium">Host</label>
                   <Input
                     value={editProxyHost}
                     onChange={(e) => setEditProxyHost(e.target.value)}
@@ -668,7 +755,7 @@ export default function Instances() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Usuário Proxy</label>
+                  <label className="text-sm font-medium">Usuário (Opcional)</label>
                   <Input
                     value={editProxyUser}
                     onChange={(e) => setEditProxyUser(e.target.value)}
@@ -676,7 +763,7 @@ export default function Instances() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Senha Proxy</label>
+                  <label className="text-sm font-medium">Senha (Opcional)</label>
                   <div className="relative">
                     <Input
                       type={showEditProxyPassword ? 'text' : 'password'}
