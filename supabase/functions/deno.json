@@ -1,9 +1,9 @@
 {
   "_versions": {
-    "dispatch-messages": 13,
-    "evolution-webhook": 14,
-    "sync-instances": 2,
-    "maturador-worker": 3,
-    "test-proxy": 2
+    "dispatch-messages": 14,
+    "evolution-webhook": 15,
+    "sync-instances": 3,
+    "maturador-worker": 4,
+    "test-proxy": 3
   }
 }
