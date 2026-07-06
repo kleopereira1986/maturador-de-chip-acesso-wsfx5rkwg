@@ -29,6 +29,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -66,6 +67,7 @@ export default function Instances() {
   const [proxyUser, setProxyUser] = useState('')
   const [proxyPassword, setProxyPassword] = useState('')
   const [showProxyPassword, setShowProxyPassword] = useState(false)
+  const [useProxy, setUseProxy] = useState(false)
   const [userAgent, setUserAgent] = useState('')
 
   const [isEditing, setIsEditing] = useState(false)
@@ -76,6 +78,7 @@ export default function Instances() {
   const [editProxyUser, setEditProxyUser] = useState('')
   const [editProxyPassword, setEditProxyPassword] = useState('')
   const [showEditProxyPassword, setShowEditProxyPassword] = useState(false)
+  const [editUseProxy, setEditUseProxy] = useState(false)
   const [editUserAgent, setEditUserAgent] = useState('')
 
   const [isTestingProxy, setIsTestingProxy] = useState(false)
@@ -207,7 +210,7 @@ export default function Instances() {
       return
     }
 
-    if ((proxyHost || proxyPort || proxyUser || proxyPassword) && (!proxyHost || !proxyPort)) {
+    if (useProxy && (!proxyHost || !proxyPort)) {
       toast({
         title: 'Aviso',
         description: 'Se for utilizar proxy, os campos Host e Porta são obrigatórios.',
@@ -220,7 +223,9 @@ export default function Instances() {
     try {
       const token = generateToken()
       const instanceNameWithoutSpaces = name.replace(/\s+/g, '-')
-      const constructedProxyUrl = buildProxyString(proxyHost, proxyPort, proxyUser, proxyPassword)
+      const constructedProxyUrl = useProxy
+        ? buildProxyString(proxyHost, proxyPort, proxyUser, proxyPassword)
+        : null
 
       const createRes = await fetch(`${urlServidor}/instance/create`, {
         method: 'POST',
@@ -247,10 +252,10 @@ export default function Instances() {
       const createData = await createRes.json()
 
       await instancesService.createInstance(instanceNameWithoutSpaces, token, {
-        proxy_host: proxyHost,
-        proxy_port: proxyPort,
-        proxy_user: proxyUser,
-        proxy_password: proxyPassword,
+        proxy_host: useProxy ? proxyHost : null,
+        proxy_port: useProxy ? proxyPort : null,
+        proxy_user: useProxy ? proxyUser : null,
+        proxy_password: useProxy ? proxyPassword : null,
         user_agent: userAgent,
       })
 
@@ -260,6 +265,7 @@ export default function Instances() {
       setProxyPort('')
       setProxyUser('')
       setProxyPassword('')
+      setUseProxy(false)
       setUserAgent('')
       setIsModalOpen(false)
 
@@ -284,15 +290,13 @@ export default function Instances() {
     setEditProxyPort(instance.proxy_port || '')
     setEditProxyUser(instance.proxy_user || '')
     setEditProxyPassword(instance.proxy_password || '')
+    setEditUseProxy(!!(instance.proxy_host && instance.proxy_port))
     setEditUserAgent(instance.user_agent || '')
     setIsEditModalOpen(true)
   }
 
   const handleEdit = async () => {
-    if (
-      (editProxyHost || editProxyPort || editProxyUser || editProxyPassword) &&
-      (!editProxyHost || !editProxyPort)
-    ) {
+    if (editUseProxy && (!editProxyHost || !editProxyPort)) {
       toast({
         title: 'Aviso',
         description: 'Se for utilizar proxy, os campos Host e Porta são obrigatórios.',
@@ -304,10 +308,10 @@ export default function Instances() {
     setIsEditing(true)
     try {
       await instancesService.updateInstance(editInstanceId, {
-        proxy_host: editProxyHost,
-        proxy_port: editProxyPort,
-        proxy_user: editProxyUser,
-        proxy_password: editProxyPassword,
+        proxy_host: editUseProxy ? editProxyHost : null,
+        proxy_port: editUseProxy ? editProxyPort : null,
+        proxy_user: editUseProxy ? editProxyUser : null,
+        proxy_password: editUseProxy ? editProxyPassword : null,
         user_agent: editUserAgent,
       })
       toast({ title: 'Sucesso', description: 'Instância atualizada com sucesso' })
@@ -642,13 +646,18 @@ export default function Instances() {
 
             <div className="p-4 border rounded-md bg-slate-50 space-y-4">
               <div className="flex justify-between items-center">
-                <p className="text-sm font-semibold">Configurações de Proxy</p>
+                <div className="flex items-center gap-2">
+                  <Switch id="use-proxy" checked={useProxy} onCheckedChange={setUseProxy} />
+                  <label htmlFor="use-proxy" className="text-sm font-semibold cursor-pointer">
+                    Usar Proxy
+                  </label>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => testProxyConnection(false)}
-                  disabled={isTestingProxy || !proxyHost || !proxyPort}
+                  disabled={!useProxy || isTestingProxy || !proxyHost || !proxyPort}
                   className="h-8"
                 >
                   {isTestingProxy ? (
@@ -666,6 +675,7 @@ export default function Instances() {
                     value={proxyHost}
                     onChange={(e) => setProxyHost(e.target.value)}
                     placeholder="proxy.exemplo.com"
+                    disabled={!useProxy}
                   />
                 </div>
                 <div className="space-y-2">
@@ -674,6 +684,7 @@ export default function Instances() {
                     value={proxyPort}
                     onChange={(e) => setProxyPort(e.target.value)}
                     placeholder="8080"
+                    disabled={!useProxy}
                   />
                 </div>
               </div>
@@ -684,6 +695,7 @@ export default function Instances() {
                     value={proxyUser}
                     onChange={(e) => setProxyUser(e.target.value)}
                     placeholder="Opcional"
+                    disabled={!useProxy}
                   />
                 </div>
                 <div className="space-y-2">
@@ -694,6 +706,7 @@ export default function Instances() {
                       value={proxyPassword}
                       onChange={(e) => setProxyPassword(e.target.value)}
                       placeholder="Opcional"
+                      disabled={!useProxy}
                     />
                     <Button
                       type="button"
@@ -701,6 +714,7 @@ export default function Instances() {
                       size="icon"
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowProxyPassword(!showProxyPassword)}
+                      disabled={!useProxy}
                     >
                       {showProxyPassword ? (
                         <EyeOff className="h-4 w-4 text-slate-500" />
@@ -768,13 +782,22 @@ export default function Instances() {
 
             <div className="p-4 border rounded-md bg-slate-50 space-y-4">
               <div className="flex justify-between items-center">
-                <p className="text-sm font-semibold">Configurações de Proxy</p>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="edit-use-proxy"
+                    checked={editUseProxy}
+                    onCheckedChange={setEditUseProxy}
+                  />
+                  <label htmlFor="edit-use-proxy" className="text-sm font-semibold cursor-pointer">
+                    Usar Proxy
+                  </label>
+                </div>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => testProxyConnection(true)}
-                  disabled={isTestingProxy || !editProxyHost || !editProxyPort}
+                  disabled={!editUseProxy || isTestingProxy || !editProxyHost || !editProxyPort}
                   className="h-8"
                 >
                   {isTestingProxy ? (
@@ -792,6 +815,7 @@ export default function Instances() {
                     value={editProxyHost}
                     onChange={(e) => setEditProxyHost(e.target.value)}
                     placeholder="proxy.exemplo.com"
+                    disabled={!editUseProxy}
                   />
                 </div>
                 <div className="space-y-2">
@@ -800,6 +824,7 @@ export default function Instances() {
                     value={editProxyPort}
                     onChange={(e) => setEditProxyPort(e.target.value)}
                     placeholder="8080"
+                    disabled={!editUseProxy}
                   />
                 </div>
               </div>
@@ -810,6 +835,7 @@ export default function Instances() {
                     value={editProxyUser}
                     onChange={(e) => setEditProxyUser(e.target.value)}
                     placeholder="Opcional"
+                    disabled={!editUseProxy}
                   />
                 </div>
                 <div className="space-y-2">
@@ -820,6 +846,7 @@ export default function Instances() {
                       value={editProxyPassword}
                       onChange={(e) => setEditProxyPassword(e.target.value)}
                       placeholder="Opcional"
+                      disabled={!editUseProxy}
                     />
                     <Button
                       type="button"
@@ -827,6 +854,7 @@ export default function Instances() {
                       size="icon"
                       className="absolute right-0 top-0 h-full px-3"
                       onClick={() => setShowEditProxyPassword(!showEditProxyPassword)}
+                      disabled={!editUseProxy}
                     >
                       {showEditProxyPassword ? (
                         <EyeOff className="h-4 w-4 text-slate-500" />
